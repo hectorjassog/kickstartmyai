@@ -1,13 +1,17 @@
 """Database configuration and session management."""
 
+import re
+import uuid
 import logging
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Any
 from contextlib import asynccontextmanager
 
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.ext.declarative import as_declarative, declared_attr
 from sqlalchemy.orm import Session
-from sqlalchemy import event, create_engine
+from sqlalchemy import event, create_engine, Column, DateTime, MetaData
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.sql import func
 from sqlalchemy.pool import NullPool, QueuePool
 
 from app.core.config import settings
@@ -15,8 +19,36 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Create the declarative base
-Base = declarative_base()
+# Explicitly create a MetaData instance
+metadata = MetaData()
+
+@as_declarative(metadata=metadata)
+class Base:
+    """
+    Base class for all database models with UUID primary keys and UTC timestamps.
+    """
+    id: Any
+    __name__: str
+    
+    # Generate __tablename__ automatically from class name
+    @declared_attr
+    def __tablename__(cls) -> str:
+        # Convert CamelCase to snake_case
+        name = cls.__name__
+        s1 = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
+        return re.sub('([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
+    
+    # Primary key column with UUID
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    
+    # UTC Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False
+    )
 
 # Async engine for modern async operations
 async_engine = create_async_engine(
@@ -49,6 +81,7 @@ sync_engine = create_engine(
 
 # Sync session for migrations
 from sqlalchemy.orm import sessionmaker
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=sync_engine)
 
 
