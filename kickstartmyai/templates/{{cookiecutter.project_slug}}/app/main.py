@@ -15,7 +15,7 @@ from app.api.middleware.logging import LoggingMiddleware
 from app.api.middleware.error_handling import ErrorHandlingMiddleware
 from app.api.middleware.rate_limiting import RateLimitingMiddleware
 from app.api.v1.api import api_router
-from app.monitoring.health_checks import health_check
+from app.monitoring.health_checks import router as health_router
 
 
 @asynccontextmanager
@@ -48,9 +48,7 @@ def create_application() -> FastAPI:
     
     # Include routers
     app.include_router(api_router, prefix=settings.API_V1_STR)
-    
-    # Health check endpoint
-    app.get("/health")(health_check)
+    app.include_router(health_router, tags=["health"])
     
     return app
 

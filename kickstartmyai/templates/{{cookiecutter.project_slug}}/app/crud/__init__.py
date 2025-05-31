@@ -12,6 +12,8 @@ from .message import (
     create_message, get_message, get_messages,
     update_message, delete_message
 )
+from .agent import agent
+from .execution import execution
 
 __all__ = [
     # User CRUD
@@ -22,5 +24,9 @@ __all__ = [
     "update_conversation", "delete_conversation",
     # Message CRUD
     "create_message", "get_message", "get_messages",
-    "update_message", "delete_message"
+    "update_message", "delete_message",
+    # Agent CRUD
+    "agent",
+    # Execution CRUD
+    "execution"
 ]
