@@ -45,6 +45,7 @@ class Agent(Base):
     enable_memory = Column(Boolean, default=True, nullable=False)
     memory_types = Column(JSON, default=lambda: ["conversation"], nullable=False)
     available_tools = Column(JSON, default=list, nullable=False)
+    tools_enabled = Column(Boolean, default=True, nullable=False)
     
     # Metadata
     agent_type = Column(SQLEnum(AgentType), default=AgentType.PERSONAL, nullable=False)
@@ -94,6 +95,22 @@ class Agent(Base):
             return float(self.temperature)
         except (ValueError, TypeError):
             return 0.7
+    
+    def get_available_tools(self) -> List[str]:
+        """Get list of available tool names."""
+        return self.available_tools or []
+    
+    def add_tool(self, tool_name: str) -> None:
+        """Add a tool to the available tools list."""
+        if self.available_tools is None:
+            self.available_tools = []
+        if tool_name not in self.available_tools:
+            self.available_tools.append(tool_name)
+    
+    def remove_tool(self, tool_name: str) -> None:
+        """Remove a tool from the available tools list."""
+        if self.available_tools and tool_name in self.available_tools:
+            self.available_tools.remove(tool_name)
     
     def __repr__(self) -> str:
         return f"<Agent(id={self.id}, name='{self.name}', provider='{self.provider}', model='{self.model}')>"

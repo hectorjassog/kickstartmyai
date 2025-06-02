@@ -111,6 +111,7 @@ resource "aws_secretsmanager_secret_version" "api_keys" {
   secret_string = jsonencode({
     openai_api_key    = var.openai_api_key
     anthropic_api_key = var.anthropic_api_key
+    gemini_api_key    = var.gemini_api_key
   })
 }
 

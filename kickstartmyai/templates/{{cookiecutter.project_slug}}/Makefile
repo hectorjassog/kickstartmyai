@@ -1,6 +1,6 @@
 # {{cookiecutter.project_name}} - Development Makefile
 
-.PHONY: help install install-dev setup clean test test-cov lint format type-check pre-commit run-dev run-prod build docker-build docker-run docker-up docker-down db-create db-migrate db-upgrade db-downgrade db-reset deploy-dev deploy-prod
+.PHONY: help install install-dev setup clean test test-cov lint format type-check pre-commit run-dev run-prod build docker-build docker-run docker-up docker-down db-init db-create db-migrate db-upgrade db-downgrade db-reset deploy-dev deploy-prod
 
 # Default target
 help:
@@ -35,6 +35,7 @@ help:
 	@echo "  docker-down   Stop Docker Compose services"
 	@echo ""
 	@echo "Database:"
+	@echo "  db-init       Initialize database (first time setup)"
 	@echo "  db-create     Create database"
 	@echo "  db-migrate    Create new migration"
 	@echo "  db-upgrade    Apply migrations"
@@ -119,10 +120,18 @@ docker-logs:
 	docker-compose logs -f
 
 # Database
+db-init:
+	@echo "🚀 Initializing database for the first time..."
+	python scripts/database/init_db.py
+
 db-create:
 	python scripts/database/create_db.py
 
 db-migrate:
+	@if [ -z "$(msg)" ]; then \
+		echo "Error: Please provide a migration message. Usage: make db-migrate msg='Your migration message'"; \
+		exit 1; \
+	fi
 	alembic revision --autogenerate -m "$(msg)"
 
 db-upgrade:

@@ -135,6 +135,7 @@ module "ecs" {
     SECRET_KEY      = var.secret_key_arn
     OPENAI_API_KEY  = var.openai_api_key_arn
     ANTHROPIC_API_KEY = var.anthropic_api_key_arn
+    GEMINI_API_KEY = var.gemini_api_key_arn
   }
   
   tags = {
@@ -167,6 +168,7 @@ module "secrets" {
     secret_key        = var.secret_key
     openai_api_key    = var.openai_api_key
     anthropic_api_key = var.anthropic_api_key
+    gemini_api_key    = var.gemini_api_key
   }
   
   tags = {

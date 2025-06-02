@@ -292,27 +292,192 @@ httpx==0.25.2
             (project_path / "requirements.txt").write_text(requirements)
             
             # Create .env.example
-            env_example = f"""# Application
+            env_example = f"""# {context['project_name']} Environment Configuration
+# Copy this file to .env and update the values for your environment
+
+# =============================================================================
+# BASIC APPLICATION SETTINGS
+# =============================================================================
+
+# Project Information
 PROJECT_NAME={context['project_name']}
+PROJECT_SLUG={context['project_slug']}
+VERSION={context['version']}
+DESCRIPTION={context['description']}
+
+# Environment (development, staging, production)
+ENVIRONMENT=development
 DEBUG={context['debug']}
-LOG_LEVEL={context['log_level']}
-SECRET_KEY=your-secret-key-here
 
-# Database
-DATABASE_URL=postgresql://{context['database_user']}:password@localhost:5432/{context['database_name']}
+# Server Configuration
+HOST=0.0.0.0
+PORT=8000
+RELOAD=true
 
-# Redis
+# API Configuration
+API_V1_STR=/api/v1
+DOCS_URL=/docs
+REDOC_URL=/redoc
+OPENAPI_URL=/openapi.json
+
+# =============================================================================
+# SECURITY SETTINGS
+# =============================================================================
+
+# Secret key for JWT tokens (CHANGE THIS IN PRODUCTION!)
+SECRET_KEY=your-super-secret-key-change-this-in-production
+ALGORITHM=HS256
+
+# Token expiration times (in minutes)
+ACCESS_TOKEN_EXPIRE_MINUTES=11520  # 8 days
+REFRESH_TOKEN_EXPIRE_MINUTES=43200  # 30 days
+
+# =============================================================================
+# DATABASE CONFIGURATION
+# =============================================================================
+
+# PostgreSQL Database Settings
+POSTGRES_SERVER=localhost
+POSTGRES_USER={context['database_user']}
+POSTGRES_PASSWORD=your-database-password
+POSTGRES_DB={context['database_name']}
+POSTGRES_PORT=5432
+
+# Alternative: Full database URL (overrides individual settings above)
+# DATABASE_URL=postgresql://{context['database_user']}:password@localhost:5432/{context['database_name']}
+
+# Database Pool Configuration
+DATABASE_POOL_SIZE=5
+DATABASE_MAX_OVERFLOW=10
+
+# =============================================================================
+# REDIS CONFIGURATION
+# =============================================================================
+
+# Redis URL for caching and session storage
 REDIS_URL=redis://localhost:6379/0
+REDIS_POOL_SIZE=10
+REDIS_TTL_DEFAULT=3600  # 1 hour
 
-# AI Providers
-OPENAI_API_KEY=your-openai-api-key
-ANTHROPIC_API_KEY=your-anthropic-api-key
-GEMINI_API_KEY=your-gemini-api-key
+# Cache Configuration
+CACHE_ENABLED=true
+CACHE_PREFIX={context['project_slug']}
+CACHE_DEFAULT_TTL=300  # 5 minutes
 
-# AWS
+# =============================================================================
+# CORS SETTINGS
+# =============================================================================
+
+# Comma-separated list of allowed origins
+BACKEND_CORS_ORIGINS=http://localhost:3000,http://localhost:8080,http://localhost:5173
+
+# =============================================================================
+# AI PROVIDER SETTINGS
+# =============================================================================
+
+# OpenAI Configuration
+OPENAI_API_KEY=your-openai-api-key-here
+OPENAI_ORG_ID=your-openai-org-id-here
+OPENAI_MODEL_DEFAULT=gpt-4
+OPENAI_MAX_TOKENS=4096
+OPENAI_TEMPERATURE=0.7
+
+# Anthropic Configuration
+ANTHROPIC_API_KEY=your-anthropic-api-key-here
+ANTHROPIC_MODEL_DEFAULT=claude-3-sonnet-20240229
+ANTHROPIC_MAX_TOKENS=4096
+
+# Gemini Configuration
+GEMINI_API_KEY=your-gemini-api-key-here
+GEMINI_MODEL_DEFAULT=gemini-1.5-flash
+GEMINI_MAX_TOKENS=4096
+GEMINI_TEMPERATURE=0.7
+
+# AI Service Configuration
+AI_REQUEST_TIMEOUT=60
+AI_MAX_RETRIES=3
+AI_RETRY_DELAY=1.0
+AI_BATCH_SIZE=10
+
+# Function Calling Configuration
+FUNCTION_CALLING_ENABLED=true
+MAX_FUNCTION_CALLS=5
+FUNCTION_TIMEOUT=30
+
+# =============================================================================
+# TOOL CONFIGURATION
+# =============================================================================
+
+# Tool Settings
+TOOLS_ENABLED=true
+WEB_SEARCH_MAX_RESULTS=10
+CODE_EXECUTION_TIMEOUT=30
+FILE_UPLOAD_MAX_SIZE=10485760  # 10MB in bytes
+
+# =============================================================================
+# MONITORING & LOGGING
+# =============================================================================
+
+# Sentry DSN for error tracking (optional)
+SENTRY_DSN=
+
+# Logging Configuration
+LOG_LEVEL={context['log_level']}
+LOG_FORMAT=json
+LOG_FILE=
+
+# Metrics & Telemetry
+METRICS_ENABLED=true
+TELEMETRY_ENABLED=true
+PROMETHEUS_METRICS=false
+
+# Health Check Configuration
+HEALTH_CHECK_INTERVAL=30
+HEALTH_CHECK_TIMEOUT=5
+
+# =============================================================================
+# AWS CONFIGURATION
+# =============================================================================
+
+# AWS Settings (optional)
 AWS_REGION={context['aws_region']}
-AWS_ACCESS_KEY_ID=your-aws-access-key
-AWS_SECRET_ACCESS_KEY=your-aws-secret-key
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+AWS_S3_BUCKET=
+
+# =============================================================================
+# RATE LIMITING
+# =============================================================================
+
+# Rate Limiting Configuration
+RATE_LIMIT_ENABLED=true
+RATE_LIMIT_REQUESTS_PER_MINUTE=60
+RATE_LIMIT_BURST_SIZE=100
+
+# =============================================================================
+# BACKGROUND TASKS
+# =============================================================================
+
+# Celery Configuration (optional)
+CELERY_BROKER_URL=
+CELERY_RESULT_BACKEND=
+TASK_QUEUE_ENABLED=false
+
+# =============================================================================
+# FEATURE FLAGS
+# =============================================================================
+
+# Feature toggles (set to true/false)
+FEATURE_NEW_UI=false
+FEATURE_ADVANCED_ANALYTICS=false
+FEATURE_BETA_FEATURES=false
+
+# =============================================================================
+# DEVELOPMENT SETTINGS
+# =============================================================================
+
+# Development-specific settings
+# Add any development-only configuration here
 """
             
             (project_path / ".env.example").write_text(env_example)

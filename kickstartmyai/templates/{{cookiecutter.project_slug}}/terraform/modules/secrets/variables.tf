@@ -57,3 +57,10 @@ variable "anthropic_api_key" {
   default     = "your-anthropic-api-key-here"
   sensitive   = true
 }
+
+variable "gemini_api_key" {
+  description = "Google Gemini API key"
+  type        = string
+  default     = "your-gemini-api-key-here"
+  sensitive   = true
+}

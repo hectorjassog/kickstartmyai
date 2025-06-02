@@ -1,25 +1,29 @@
 """
 CRUD operations for Agent model.
+
+This module provides comprehensive CRUD operations for agent management,
+including advanced querying, filtering, and analytics.
 """
 
 from datetime import datetime
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 from uuid import UUID
 
-from sqlalchemy import and_, or_, desc, asc, func
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy import and_, or_, desc, asc, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.crud.base import CRUDBase
 from app.models.agent import Agent, AgentType, AgentStatus
-from app.schemas.agent import AgentCreate, AgentUpdate, AgentFilter
+from app.schemas.agent import AgentCreate, AgentUpdate
 
 
 class CRUDAgent(CRUDBase[Agent, AgentCreate, AgentUpdate]):
     """CRUD operations for Agent model."""
 
-    def create_with_user(
+    async def create_with_user(
         self, 
-        db: Session, 
+        db: AsyncSession, 
         *, 
         obj_in: AgentCreate, 
         user_id: UUID
@@ -29,32 +33,62 @@ class CRUDAgent(CRUDBase[Agent, AgentCreate, AgentUpdate]):
         obj_in_data["user_id"] = user_id
         db_obj = self.model(**obj_in_data)
         db.add(db_obj)
-        db.commit()
-        db.refresh(db_obj)
+        await db.commit()
+        await db.refresh(db_obj)
         return db_obj
 
-    def get_by_user(
+    async def get_by_user(
         self, 
-        db: Session, 
+        db: AsyncSession, 
         *, 
         user_id: UUID, 
         skip: int = 0, 
-        limit: int = 100
+        limit: int = 100,
+        include_deprecated: bool = False
     ) -> List[Agent]:
         """Get agents by user ID with pagination."""
-        return (
-            db.query(self.model)
-            .filter(self.model.user_id == user_id)
-            .filter(self.model.status != AgentStatus.DEPRECATED)
-            .order_by(desc(self.model.created_at))
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
+        query = select(self.model).where(self.model.user_id == user_id)
+        
+        if not include_deprecated:
+            query = query.where(self.model.status != AgentStatus.DEPRECATED)
+        
+        query = query.order_by(desc(self.model.created_at)).offset(skip).limit(limit)
+        
+        result = await db.execute(query)
+        return result.scalars().all()
 
-    def get_by_user_and_type(
+    async def get_by_user_with_count(
         self, 
-        db: Session, 
+        db: AsyncSession, 
+        *, 
+        user_id: UUID, 
+        skip: int = 0, 
+        limit: int = 100,
+        include_deprecated: bool = False
+    ) -> Tuple[List[Agent], int]:
+        """Get agents by user ID with total count."""
+        # Build base queries
+        base_query = select(self.model).where(self.model.user_id == user_id)
+        count_query = select(func.count(self.model.id)).where(self.model.user_id == user_id)
+        
+        if not include_deprecated:
+            base_query = base_query.where(self.model.status != AgentStatus.DEPRECATED)
+            count_query = count_query.where(self.model.status != AgentStatus.DEPRECATED)
+        
+        # Get count
+        count_result = await db.execute(count_query)
+        total_count = count_result.scalar()
+        
+        # Get agents with pagination
+        agents_query = base_query.order_by(desc(self.model.created_at)).offset(skip).limit(limit)
+        agents_result = await db.execute(agents_query)
+        agents = agents_result.scalars().all()
+        
+        return agents, total_count
+
+    async def get_by_user_and_type(
+        self, 
+        db: AsyncSession, 
         *, 
         user_id: UUID, 
         agent_type: AgentType,
@@ -62,61 +96,60 @@ class CRUDAgent(CRUDBase[Agent, AgentCreate, AgentUpdate]):
         limit: int = 100
     ) -> List[Agent]:
         """Get agents by user ID and type."""
-        return (
-            db.query(self.model)
-            .filter(and_(
+        query = select(self.model).where(
+            and_(
                 self.model.user_id == user_id,
                 self.model.agent_type == agent_type,
                 self.model.status != AgentStatus.DEPRECATED
-            ))
-            .order_by(desc(self.model.created_at))
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
+            )
+        ).order_by(desc(self.model.created_at)).offset(skip).limit(limit)
+        
+        result = await db.execute(query)
+        return result.scalars().all()
 
-    def get_by_name(
+    async def get_by_name(
         self, 
-        db: Session, 
+        db: AsyncSession, 
         *, 
         user_id: UUID, 
         name: str
     ) -> Optional[Agent]:
         """Get agent by name for a specific user."""
-        return (
-            db.query(self.model)
-            .filter(and_(
+        query = select(self.model).where(
+            and_(
                 self.model.user_id == user_id,
                 self.model.name == name
-            ))
-            .first()
+            )
         )
+        
+        result = await db.execute(query)
+        return result.scalar_one_or_none()
 
-    def get_active_agents(
+    async def get_active_agents(
         self, 
-        db: Session, 
+        db: AsyncSession, 
         *, 
         user_id: Optional[UUID] = None,
         skip: int = 0,
         limit: int = 100
     ) -> List[Agent]:
         """Get all active agents, optionally filtered by user."""
-        query = db.query(self.model).filter(self.model.status == AgentStatus.ACTIVE)
+        query = select(self.model).where(self.model.status == AgentStatus.ACTIVE)
         
         if user_id:
-            query = query.filter(self.model.user_id == user_id)
+            query = query.where(self.model.user_id == user_id)
         
-        return (
-            query
-            .order_by(desc(self.model.last_used_at), desc(self.model.created_at))
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
+        query = query.order_by(
+            desc(self.model.last_used_at), 
+            desc(self.model.created_at)
+        ).offset(skip).limit(limit)
+        
+        result = await db.execute(query)
+        return result.scalars().all()
 
-    def get_by_tags(
+    async def get_by_tags(
         self, 
-        db: Session, 
+        db: AsyncSession, 
         *, 
         tags: List[str], 
         user_id: Optional[UUID] = None,
@@ -124,31 +157,31 @@ class CRUDAgent(CRUDBase[Agent, AgentCreate, AgentUpdate]):
         limit: int = 100
     ) -> List[Agent]:
         """Get agents by tags."""
-        query = db.query(self.model)
+        query = select(self.model)
         
         if user_id:
-            query = query.filter(self.model.user_id == user_id)
+            query = query.where(self.model.user_id == user_id)
         
         # Filter by tags (any of the provided tags)
-        tag_conditions = []
-        for tag in tags:
-            tag_conditions.append(self.model.tags.contains([tag]))
+        if tags:
+            tag_conditions = []
+            for tag in tags:
+                # Assuming tags is a JSON array field
+                tag_conditions.append(self.model.tags.contains([tag]))
+            
+            if tag_conditions:
+                query = query.where(or_(*tag_conditions))
         
-        if tag_conditions:
-            query = query.filter(or_(*tag_conditions))
+        query = query.where(self.model.status != AgentStatus.DEPRECATED).order_by(
+            desc(self.model.created_at)
+        ).offset(skip).limit(limit)
         
-        return (
-            query
-            .filter(self.model.status != AgentStatus.DEPRECATED)
-            .order_by(desc(self.model.created_at))
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
+        result = await db.execute(query)
+        return result.scalars().all()
 
-    def search_agents(
+    async def search_agents(
         self, 
-        db: Session, 
+        db: AsyncSession, 
         *, 
         search_term: str,
         user_id: Optional[UUID] = None,
@@ -156,10 +189,10 @@ class CRUDAgent(CRUDBase[Agent, AgentCreate, AgentUpdate]):
         limit: int = 100
     ) -> List[Agent]:
         """Search agents by name and description."""
-        query = db.query(self.model)
+        query = select(self.model)
         
         if user_id:
-            query = query.filter(self.model.user_id == user_id)
+            query = query.where(self.model.user_id == user_id)
         
         # Search in name and description
         search_filter = or_(
@@ -167,254 +200,272 @@ class CRUDAgent(CRUDBase[Agent, AgentCreate, AgentUpdate]):
             self.model.description.ilike(f"%{search_term}%")
         )
         
-        return (
-            query
-            .filter(search_filter)
-            .filter(self.model.status != AgentStatus.DEPRECATED)
-            .order_by(desc(self.model.created_at))
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
+        query = query.where(search_filter).where(
+            self.model.status != AgentStatus.DEPRECATED
+        ).order_by(desc(self.model.created_at)).offset(skip).limit(limit)
+        
+        result = await db.execute(query)
+        return result.scalars().all()
 
-    def get_filtered(
+    async def get_filtered(
         self, 
-        db: Session, 
+        db: AsyncSession, 
         *, 
-        filters: AgentFilter,
+        user_id: Optional[UUID] = None,
+        agent_type: Optional[AgentType] = None,
+        status: Optional[AgentStatus] = None,
+        tags: Optional[List[str]] = None,
+        search_term: Optional[str] = None,
         skip: int = 0,
         limit: int = 100
     ) -> List[Agent]:
         """Get agents with complex filtering."""
-        query = db.query(self.model)
+        query = select(self.model)
         
         # Apply filters
-        if filters.user_id:
-            query = query.filter(self.model.user_id == filters.user_id)
+        if user_id:
+            query = query.where(self.model.user_id == user_id)
         
-        if filters.agent_type:
-            query = query.filter(self.model.agent_type == filters.agent_type)
+        if agent_type:
+            query = query.where(self.model.agent_type == agent_type)
         
-        if filters.status:
-            query = query.filter(self.model.status == filters.status)
+        if status:
+            query = query.where(self.model.status == status)
         
-        if filters.name_contains:
-            query = query.filter(self.model.name.ilike(f"%{filters.name_contains}%"))
-        
-        if filters.tags:
+        if tags:
             tag_conditions = []
-            for tag in filters.tags:
+            for tag in tags:
                 tag_conditions.append(self.model.tags.contains([tag]))
             if tag_conditions:
-                query = query.filter(or_(*tag_conditions))
+                query = query.where(or_(*tag_conditions))
         
-        if filters.created_after:
-            query = query.filter(self.model.created_at >= filters.created_after)
+        if search_term:
+            search_filter = or_(
+                self.model.name.ilike(f"%{search_term}%"),
+                self.model.description.ilike(f"%{search_term}%")
+            )
+            query = query.where(search_filter)
         
-        if filters.created_before:
-            query = query.filter(self.model.created_at <= filters.created_before)
+        query = query.order_by(desc(self.model.created_at)).offset(skip).limit(limit)
         
-        if filters.last_used_after:
-            query = query.filter(self.model.last_used_at >= filters.last_used_after)
-        
-        if filters.last_used_before:
-            query = query.filter(self.model.last_used_at <= filters.last_used_before)
-        
-        return (
-            query
-            .order_by(desc(self.model.created_at))
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
+        result = await db.execute(query)
+        return result.scalars().all()
 
-    def count_by_user(self, db: Session, *, user_id: UUID) -> int:
-        """Count total agents for a user."""
-        return (
-            db.query(self.model)
-            .filter(self.model.user_id == user_id)
-            .filter(self.model.status != AgentStatus.DEPRECATED)
-            .count()
+    async def count_by_user(self, db: AsyncSession, *, user_id: UUID) -> int:
+        """Count agents by user."""
+        query = select(func.count(self.model.id)).where(
+            and_(
+                self.model.user_id == user_id,
+                self.model.status != AgentStatus.DEPRECATED
+            )
         )
+        
+        result = await db.execute(query)
+        return result.scalar()
 
-    def count_by_type(
+    async def count_by_type(
         self, 
-        db: Session, 
+        db: AsyncSession, 
         *, 
         agent_type: AgentType, 
         user_id: Optional[UUID] = None
     ) -> int:
         """Count agents by type."""
-        query = db.query(self.model).filter(self.model.agent_type == agent_type)
+        query = select(func.count(self.model.id)).where(
+            self.model.agent_type == agent_type
+        )
         
         if user_id:
-            query = query.filter(self.model.user_id == user_id)
+            query = query.where(self.model.user_id == user_id)
         
-        return query.filter(self.model.status != AgentStatus.DEPRECATED).count()
+        result = await db.execute(query)
+        return result.scalar()
 
-    def get_most_used(
+    async def get_most_used(
         self, 
-        db: Session, 
+        db: AsyncSession, 
         *, 
         user_id: Optional[UUID] = None,
         limit: int = 10
     ) -> List[Agent]:
         """Get most used agents."""
-        query = db.query(self.model)
+        query = select(self.model).where(self.model.status == AgentStatus.ACTIVE)
         
         if user_id:
-            query = query.filter(self.model.user_id == user_id)
+            query = query.where(self.model.user_id == user_id)
         
-        return (
-            query
-            .filter(self.model.status == AgentStatus.ACTIVE)
-            .order_by(desc(self.model.usage_count), desc(self.model.last_used_at))
-            .limit(limit)
-            .all()
-        )
+        query = query.order_by(
+            desc(self.model.usage_count),
+            desc(self.model.last_used_at)
+        ).limit(limit)
+        
+        result = await db.execute(query)
+        return result.scalars().all()
 
-    def get_recently_used(
+    async def get_recently_used(
         self, 
-        db: Session, 
+        db: AsyncSession, 
         *, 
         user_id: UUID,
         limit: int = 10
     ) -> List[Agent]:
         """Get recently used agents for a user."""
-        return (
-            db.query(self.model)
-            .filter(self.model.user_id == user_id)
-            .filter(self.model.last_used_at.isnot(None))
-            .filter(self.model.status == AgentStatus.ACTIVE)
-            .order_by(desc(self.model.last_used_at))
-            .limit(limit)
-            .all()
-        )
+        query = select(self.model).where(
+            and_(
+                self.model.user_id == user_id,
+                self.model.last_used_at.is_not(None),
+                self.model.status == AgentStatus.ACTIVE
+            )
+        ).order_by(desc(self.model.last_used_at)).limit(limit)
+        
+        result = await db.execute(query)
+        return result.scalars().all()
 
-    def update_usage(
+    async def update_usage(
         self, 
-        db: Session, 
+        db: AsyncSession, 
         *, 
         agent_id: UUID
     ) -> Optional[Agent]:
         """Update agent usage statistics."""
-        db_obj = db.query(self.model).filter(self.model.id == agent_id).first()
-        if db_obj:
-            db_obj.usage_count += 1
-            db_obj.last_used_at = datetime.utcnow()
-            db.commit()
-            db.refresh(db_obj)
-        return db_obj
+        agent = await self.get(db, id=agent_id)
+        if not agent:
+            return None
+        
+        agent.usage_count = (agent.usage_count or 0) + 1
+        agent.last_used_at = datetime.utcnow()
+        agent.updated_at = datetime.utcnow()
+        
+        db.add(agent)
+        await db.commit()
+        await db.refresh(agent)
+        
+        return agent
 
-    def set_status(
+    async def set_status(
         self, 
-        db: Session, 
+        db: AsyncSession, 
         *, 
         agent_id: UUID, 
         status: AgentStatus
     ) -> Optional[Agent]:
-        """Update agent status."""
-        db_obj = db.query(self.model).filter(self.model.id == agent_id).first()
-        if db_obj:
-            db_obj.status = status
-            db_obj.updated_at = datetime.utcnow()
-            db.commit()
-            db.refresh(db_obj)
-        return db_obj
+        """Set agent status."""
+        agent = await self.get(db, id=agent_id)
+        if not agent:
+            return None
+        
+        agent.status = status
+        agent.updated_at = datetime.utcnow()
+        
+        db.add(agent)
+        await db.commit()
+        await db.refresh(agent)
+        
+        return agent
 
-    def get_with_executions(
+    async def get_with_executions(
         self, 
-        db: Session, 
+        db: AsyncSession, 
         *, 
         agent_id: UUID
     ) -> Optional[Agent]:
-        """Get agent with its executions."""
-        return (
-            db.query(self.model)
-            .options(selectinload(self.model.executions))
-            .filter(self.model.id == agent_id)
-            .first()
-        )
+        """Get agent with its executions loaded."""
+        query = select(self.model).where(
+            self.model.id == agent_id
+        ).options(selectinload(self.model.executions))
+        
+        result = await db.execute(query)
+        return result.scalar_one_or_none()
 
-    def get_statistics(
+    async def get_statistics(
         self, 
-        db: Session, 
+        db: AsyncSession, 
         *, 
         user_id: Optional[UUID] = None
     ) -> Dict[str, Any]:
         """Get agent statistics."""
-        query = db.query(self.model)
-        
+        base_query = select(self.model)
         if user_id:
-            query = query.filter(self.model.user_id == user_id)
+            base_query = base_query.where(self.model.user_id == user_id)
         
-        # Total counts by status
-        total_active = query.filter(self.model.status == AgentStatus.ACTIVE).count()
-        total_inactive = query.filter(self.model.status == AgentStatus.INACTIVE).count()
-        total_maintenance = query.filter(self.model.status == AgentStatus.MAINTENANCE).count()
-        total_deprecated = query.filter(self.model.status == AgentStatus.DEPRECATED).count()
+        # Total count
+        total_result = await db.execute(
+            select(func.count(self.model.id)).select_from(base_query.subquery())
+        )
+        total_count = total_result.scalar()
         
-        # Counts by type
-        type_counts = {}
-        for agent_type in AgentType:
-            type_counts[agent_type.value] = (
-                query.filter(self.model.agent_type == agent_type)
-                .filter(self.model.status != AgentStatus.DEPRECATED)
-                .count()
+        # Active count
+        active_result = await db.execute(
+            select(func.count(self.model.id)).select_from(
+                base_query.where(self.model.status == AgentStatus.ACTIVE).subquery()
             )
+        )
+        active_count = active_result.scalar()
+        
+        # Count by type
+        type_result = await db.execute(
+            select(
+                self.model.agent_type,
+                func.count(self.model.id)
+            ).select_from(base_query.subquery()).group_by(self.model.agent_type)
+        )
+        type_counts = {str(agent_type): count for agent_type, count in type_result.all()}
         
         # Usage statistics
-        total_usage = db.query(func.sum(self.model.usage_count)).scalar() or 0
-        avg_usage = db.query(func.avg(self.model.usage_count)).scalar() or 0
+        usage_result = await db.execute(
+            select(
+                func.sum(self.model.usage_count),
+                func.avg(self.model.usage_count),
+                func.max(self.model.usage_count)
+            ).select_from(base_query.subquery())
+        )
+        usage_stats = usage_result.first()
         
         return {
-            "total_agents": total_active + total_inactive + total_maintenance,
-            "total_active": total_active,
-            "total_inactive": total_inactive,
-            "total_maintenance": total_maintenance,
-            "total_deprecated": total_deprecated,
-            "by_type": type_counts,
-            "total_usage": int(total_usage),
-            "average_usage": float(avg_usage),
+            "total_agents": total_count,
+            "active_agents": active_count,
+            "deprecated_agents": total_count - active_count,
+            "agents_by_type": type_counts,
+            "usage_statistics": {
+                "total_usage": usage_stats[0] or 0,
+                "average_usage": float(usage_stats[1] or 0),
+                "max_usage": usage_stats[2] or 0
+            }
         }
 
-    def duplicate_agent(
+    async def duplicate_agent(
         self, 
-        db: Session, 
+        db: AsyncSession, 
         *, 
         agent_id: UUID, 
         new_name: str,
         user_id: UUID
     ) -> Optional[Agent]:
-        """Create a duplicate of an existing agent."""
-        original = db.query(self.model).filter(self.model.id == agent_id).first()
-        if not original:
+        """Duplicate an existing agent."""
+        original_agent = await self.get(db, id=agent_id)
+        if not original_agent:
             return None
         
-        # Create new agent with same configuration
+        # Create new agent with copied data
         agent_data = {
             "name": new_name,
-            "description": f"Copy of {original.name}",
-            "agent_type": original.agent_type,
-            "status": AgentStatus.ACTIVE,
-            "system_prompt": original.system_prompt,
-            "max_tokens": original.max_tokens,
-            "temperature": original.temperature,
-            "top_p": original.top_p,
-            "tools_enabled": original.tools_enabled,
-            "memory_enabled": original.memory_enabled,
-            "streaming_enabled": original.streaming_enabled,
-            "tags": original.tags.copy() if original.tags else [],
-            "configuration": original.configuration.copy() if original.configuration else {},
-            "metadata": original.metadata.copy() if original.metadata else {},
-            "user_id": user_id
+            "description": f"Copy of {original_agent.name}",
+            "agent_type": original_agent.agent_type,
+            "instructions": original_agent.instructions,
+            "capabilities": original_agent.capabilities,
+            "configuration": original_agent.configuration,
+            "tags": original_agent.tags or [],
+            "user_id": user_id,
+            "status": AgentStatus.DRAFT
         }
         
-        db_obj = self.model(**agent_data)
-        db.add(db_obj)
-        db.commit()
-        db.refresh(db_obj)
-        return db_obj
+        new_agent = self.model(**agent_data)
+        db.add(new_agent)
+        await db.commit()
+        await db.refresh(new_agent)
+        
+        return new_agent
 
 
-agent = CRUDAgent(Agent)
+# Create global instance
+agent_crud = CRUDAgent(Agent)

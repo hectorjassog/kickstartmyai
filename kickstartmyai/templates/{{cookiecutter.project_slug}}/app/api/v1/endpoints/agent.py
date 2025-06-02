@@ -23,15 +23,15 @@ from app.core.exceptions import (
 )
 from app.crud import agent_crud
 from app.models import User
+from app.models.agent import AgentStatus, AgentType
 from app.schemas import (
+    Agent,
     AgentCreate,
     AgentUpdate,
-    AgentResponse,
     AgentListResponse,
-    AgentSearchFilters,
-    AgentDuplicate,
+    AgentFilter,
     AgentStatistics,
-    AgentConfigurationTemplate,
+    AgentWithExecutions
 )
 
 
@@ -40,47 +40,45 @@ router = APIRouter()
 
 @router.get("/", response_model=AgentListResponse)
 async def list_agents(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    agent_type: Optional[AgentType] = None,
+    status: Optional[AgentStatus] = None,
+    is_public: Optional[bool] = None,
+    search_term: Optional[str] = None,
+    include_deprecated: bool = False,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    pagination: PaginationParams = Depends(get_pagination_params),
-    search: SearchParams = Depends(get_search_params),
-    filters: Optional[AgentSearchFilters] = None,
-    _: None = Depends(rate_limiter),
 ):
     """List agents for the current user."""
     try:
-        # Build filter dict
-        filter_dict = {"user_id": current_user.id}
-        if filters:
-            if filters.agent_type:
-                filter_dict["agent_type"] = filters.agent_type
-            if filters.status:
-                filter_dict["status"] = filters.status
-            if filters.is_active is not None:
-                filter_dict["is_active"] = filters.is_active
-        
-        # Get agents with search and pagination
-        agents = await agent_crud.get_multi_filtered(
-            db,
-            filters=filter_dict,
-            search_query=search.query,
-            search_fields=["name", "description"],
-            skip=pagination.skip,
-            limit=pagination.limit,
-            order_by=search.sort_by or "created_at",
-            order_direction=search.get_sort_order(),
+        filters = AgentFilter(
+            user_id=current_user.id,
+            agent_type=agent_type,
+            status=status,
+            is_public=is_public,
+            search_term=search_term,
+            include_deprecated=include_deprecated
         )
         
-        # Get total count
-        total = await agent_crud.count_filtered(db, filters=filter_dict)
+        if search_term:
+            agents = await agent_crud.search_agents(
+                db, search_term=search_term, user_id=current_user.id, skip=skip, limit=limit
+            )
+            total_count = len(agents)  # For search, we'll use simple count
+        else:
+            agents, total_count = await agent_crud.get_by_user_with_count(
+                db, user_id=current_user.id, skip=skip, limit=limit, 
+                include_deprecated=include_deprecated
+            )
         
         return AgentListResponse(
             agents=agents,
-            total=total,
-            skip=pagination.skip,
-            limit=pagination.limit,
+            total_count=total_count,
+            page=skip // limit + 1,
+            page_size=limit,
+            has_next=(skip + limit) < total_count
         )
-    
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -88,30 +86,31 @@ async def list_agents(
         )
 
 
-@router.post("/", response_model=AgentResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=Agent, status_code=status.HTTP_201_CREATED)
 async def create_agent(
     agent_data: AgentCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    _: None = Depends(rate_limiter),
 ):
     """Create a new agent."""
     try:
         # Check if agent with same name exists for user
-        existing_agent = await agent_crud.get_by_name_and_user(
-            db, name=agent_data.name, user_id=current_user.id
+        existing_agent = await agent_crud.get_by_name(
+            db, user_id=current_user.id, name=agent_data.name
         )
         if existing_agent:
-            raise ConflictError("Agent", f"Agent with name '{agent_data.name}' already exists")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Agent with name '{agent_data.name}' already exists"
+            )
         
         # Create agent
-        agent = await agent_crud.create_with_owner(
-            db, obj_in=agent_data, owner_id=current_user.id
+        agent = await agent_crud.create_with_user(
+            db, obj_in=agent_data, user_id=current_user.id
         )
         
-        return AgentResponse.from_orm(agent)
-    
-    except ConflictError:
+        return agent
+    except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(
@@ -120,22 +119,30 @@ async def create_agent(
         )
 
 
-@router.get("/{agent_id}", response_model=AgentResponse)
+@router.get("/{agent_id}", response_model=Agent)
 async def get_agent(
     agent_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_resource_owner("agent")),
-    _: None = Depends(rate_limiter),
+    current_user: User = Depends(get_current_user),
 ):
     """Get a specific agent."""
     try:
         agent = await agent_crud.get(db, id=agent_id)
         if not agent:
-            raise NotFoundError("Agent", f"Agent {agent_id} not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Agent {agent_id} not found"
+            )
         
-        return AgentResponse.from_orm(agent)
-    
-    except NotFoundError:
+        # Check ownership
+        if agent.user_id != current_user.id and not agent.is_public:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to access this agent"
+            )
+        
+        return agent
+    except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(
@@ -144,32 +151,43 @@ async def get_agent(
         )
 
 
-@router.put("/{agent_id}", response_model=AgentResponse)
+@router.put("/{agent_id}", response_model=Agent)
 async def update_agent(
     agent_id: UUID,
     agent_data: AgentUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_resource_owner("agent")),
-    _: None = Depends(rate_limiter),
+    current_user: User = Depends(get_current_user),
 ):
     """Update an agent."""
     try:
         agent = await agent_crud.get(db, id=agent_id)
         if not agent:
-            raise NotFoundError("Agent", f"Agent {agent_id} not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Agent {agent_id} not found"
+            )
+        
+        # Check ownership
+        if agent.user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to update this agent"
+            )
         
         # Check if updating name and it conflicts
         if agent_data.name and agent_data.name != agent.name:
-            existing_agent = await agent_crud.get_by_name_and_user(
-                db, name=agent_data.name, user_id=current_user.id
+            existing_agent = await agent_crud.get_by_name(
+                db, user_id=current_user.id, name=agent_data.name
             )
             if existing_agent and existing_agent.id != agent_id:
-                raise ConflictError("Agent", f"Agent with name '{agent_data.name}' already exists")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Agent with name '{agent_data.name}' already exists"
+                )
         
         updated_agent = await agent_crud.update(db, db_obj=agent, obj_in=agent_data)
-        return AgentResponse.from_orm(updated_agent)
-    
-    except (NotFoundError, ConflictError):
+        return updated_agent
+    except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(
@@ -182,18 +200,26 @@ async def update_agent(
 async def delete_agent(
     agent_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_resource_owner("agent")),
-    _: None = Depends(rate_limiter),
+    current_user: User = Depends(get_current_user),
 ):
     """Delete an agent."""
     try:
         agent = await agent_crud.get(db, id=agent_id)
         if not agent:
-            raise NotFoundError("Agent", f"Agent {agent_id} not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Agent {agent_id} not found"
+            )
+        
+        # Check ownership
+        if agent.user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to delete this agent"
+            )
         
         await agent_crud.remove(db, id=agent_id)
-    
-    except NotFoundError:
+    except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(
@@ -202,30 +228,37 @@ async def delete_agent(
         )
 
 
-@router.post("/{agent_id}/duplicate", response_model=AgentResponse)
+@router.post("/{agent_id}/duplicate", response_model=Agent)
 async def duplicate_agent(
     agent_id: UUID,
-    duplicate_data: AgentDuplicate,
+    new_name: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_resource_owner("agent")),
-    _: None = Depends(rate_limiter),
+    current_user: User = Depends(get_current_user),
 ):
     """Duplicate an agent."""
     try:
-        # Check if agent with new name already exists
-        existing_agent = await agent_crud.get_by_name_and_user(
-            db, name=duplicate_data.name, user_id=current_user.id
+        # Check if new name already exists
+        existing_agent = await agent_crud.get_by_name(
+            db, user_id=current_user.id, name=new_name
         )
         if existing_agent:
-            raise ConflictError("Agent", f"Agent with name '{duplicate_data.name}' already exists")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Agent with name '{new_name}' already exists"
+            )
         
-        duplicated_agent = await agent_crud.duplicate(
-            db, agent_id=agent_id, new_name=duplicate_data.name
+        duplicated_agent = await agent_crud.duplicate_agent(
+            db, agent_id=agent_id, new_name=new_name, user_id=current_user.id
         )
         
-        return AgentResponse.from_orm(duplicated_agent)
-    
-    except (NotFoundError, ConflictError):
+        if not duplicated_agent:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Agent {agent_id} not found"
+            )
+        
+        return duplicated_agent
+    except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(
@@ -234,28 +267,35 @@ async def duplicate_agent(
         )
 
 
-@router.patch("/{agent_id}/status", response_model=AgentResponse)
+@router.patch("/{agent_id}/status", response_model=Agent)
 async def update_agent_status(
     agent_id: UUID,
-    status_update: dict,
+    new_status: AgentStatus,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_resource_owner("agent")),
-    _: None = Depends(rate_limiter),
+    current_user: User = Depends(get_current_user),
 ):
     """Update agent status."""
     try:
         agent = await agent_crud.get(db, id=agent_id)
         if not agent:
-            raise NotFoundError("Agent", f"Agent {agent_id} not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Agent {agent_id} not found"
+            )
         
-        new_status = status_update.get("status")
-        if not new_status:
-            raise ValidationError("Status is required")
+        # Check ownership
+        if agent.user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to update this agent"
+            )
         
-        updated_agent = await agent_crud.update_status(db, agent_id=agent_id, status=new_status)
-        return AgentResponse.from_orm(updated_agent)
-    
-    except (NotFoundError, ValidationError):
+        updated_agent = await agent_crud.set_status(
+            db, agent_id=agent_id, status=new_status
+        )
+        
+        return updated_agent
+    except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(
@@ -264,18 +304,32 @@ async def update_agent_status(
         )
 
 
-@router.get("/{agent_id}/statistics", response_model=AgentStatistics)
+@router.get("/{agent_id}/statistics", response_model=dict)
 async def get_agent_statistics(
     agent_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_resource_owner("agent")),
-    _: None = Depends(rate_limiter),
+    current_user: User = Depends(get_current_user),
 ):
     """Get agent statistics."""
     try:
-        stats = await agent_crud.get_statistics(db, agent_id=agent_id)
-        return AgentStatistics(**stats)
-    
+        agent = await agent_crud.get(db, id=agent_id)
+        if not agent:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Agent {agent_id} not found"
+            )
+        
+        # Check ownership or public access
+        if agent.user_id != current_user.id and not agent.is_public:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to view agent statistics"
+            )
+        
+        stats = await agent_crud.get_statistics(db, user_id=agent.user_id)
+        return stats
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -283,69 +337,86 @@ async def get_agent_statistics(
         )
 
 
-@router.get("/templates/configurations", response_model=List[AgentConfigurationTemplate])
-async def get_configuration_templates(
+@router.get("/{agent_id}/executions", response_model=AgentWithExecutions)
+async def get_agent_with_executions(
+    agent_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    _: None = Depends(rate_limiter),
 ):
-    """Get available agent configuration templates."""
+    """Get agent with its executions."""
     try:
-        templates = await agent_crud.get_configuration_templates(db)
-        return [AgentConfigurationTemplate(**template) for template in templates]
-    
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get configuration templates: {str(e)}"
-        )
-
-
-@router.post("/{agent_id}/activate", response_model=AgentResponse)
-async def activate_agent(
-    agent_id: UUID,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_resource_owner("agent")),
-    _: None = Depends(rate_limiter),
-):
-    """Activate an agent."""
-    try:
-        agent = await agent_crud.get(db, id=agent_id)
+        agent = await agent_crud.get_with_executions(db, agent_id=agent_id)
         if not agent:
-            raise NotFoundError("Agent", f"Agent {agent_id} not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Agent {agent_id} not found"
+            )
         
-        activated_agent = await agent_crud.activate(db, agent_id=agent_id)
-        return AgentResponse.from_orm(activated_agent)
-    
-    except NotFoundError:
+        # Check ownership
+        if agent.user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to access this agent"
+            )
+        
+        return agent
+    except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to activate agent: {str(e)}"
+            detail=f"Failed to get agent with executions: {str(e)}"
         )
 
 
-@router.post("/{agent_id}/deactivate", response_model=AgentResponse)
-async def deactivate_agent(
+@router.get("/active/list", response_model=List[Agent])
+async def list_active_agents(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """List active agents for the current user."""
+    try:
+        agents = await agent_crud.get_active_agents(
+            db, user_id=current_user.id, skip=skip, limit=limit
+        )
+        return agents
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list active agents: {str(e)}"
+        )
+
+
+@router.post("/{agent_id}/usage", response_model=Agent)
+async def update_agent_usage(
     agent_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_resource_owner("agent")),
-    _: None = Depends(rate_limiter),
+    current_user: User = Depends(get_current_user),
 ):
-    """Deactivate an agent."""
+    """Update agent usage count."""
     try:
         agent = await agent_crud.get(db, id=agent_id)
         if not agent:
-            raise NotFoundError("Agent", f"Agent {agent_id} not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Agent {agent_id} not found"
+            )
         
-        deactivated_agent = await agent_crud.deactivate(db, agent_id=agent_id)
-        return AgentResponse.from_orm(deactivated_agent)
-    
-    except NotFoundError:
+        # Check ownership or public access
+        if agent.user_id != current_user.id and not agent.is_public:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to update this agent"
+            )
+        
+        updated_agent = await agent_crud.update_usage(db, agent_id=agent_id)
+        return updated_agent
+    except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to deactivate agent: {str(e)}"
+            detail=f"Failed to update agent usage: {str(e)}"
         )

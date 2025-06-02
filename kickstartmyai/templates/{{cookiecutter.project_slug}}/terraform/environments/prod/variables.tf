@@ -123,3 +123,16 @@ variable "anthropic_api_key_arn" {
   type        = string
   default     = ""
 }
+
+variable "gemini_api_key" {
+  description = "Google Gemini API key"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "gemini_api_key_arn" {
+  description = "ARN of Gemini API key in Secrets Manager"
+  type        = string
+  default     = ""
+}

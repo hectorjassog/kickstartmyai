@@ -130,6 +130,9 @@ async def initialize_ai_services() -> None:
         if settings.ANTHROPIC_API_KEY:
             providers_configured.append("Anthropic")
         
+        if settings.GEMINI_API_KEY:
+            providers_configured.append("Gemini")
+        
         if not providers_configured:
             logger.warning("No AI providers configured")
         else:

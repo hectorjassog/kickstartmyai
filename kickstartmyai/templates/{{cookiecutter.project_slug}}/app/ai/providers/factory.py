@@ -5,6 +5,7 @@ from app.core.config import settings
 from .base import BaseAIProvider
 from .openai import OpenAIProvider
 from .anthropic import AnthropicProvider
+from .gemini import GeminiProvider
 
 
 class AIProviderFactory:
@@ -13,6 +14,7 @@ class AIProviderFactory:
     _providers: Dict[str, Type[BaseAIProvider]] = {
         "openai": OpenAIProvider,
         "anthropic": AnthropicProvider,
+        "gemini": GeminiProvider,
     }
     
     @classmethod
@@ -34,6 +36,8 @@ class AIProviderFactory:
                 api_key = settings.OPENAI_API_KEY
             elif provider_name == "anthropic":
                 api_key = settings.ANTHROPIC_API_KEY
+            elif provider_name == "gemini":
+                api_key = settings.GEMINI_API_KEY
             
             if not api_key:
                 raise ValueError(f"No API key provided for {provider_name}")

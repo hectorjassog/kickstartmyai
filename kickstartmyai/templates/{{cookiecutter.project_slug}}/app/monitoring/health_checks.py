@@ -288,6 +288,13 @@ class HealthChecker:
                 else:
                     providers.append("Anthropic")
             
+            # Check Gemini configuration
+            if settings.GEMINI_API_KEY:
+                if len(settings.GEMINI_API_KEY) < 20:
+                    issues.append("Gemini API key appears invalid")
+                else:
+                    providers.append("Gemini")
+            
             # Determine status
             if not providers:
                 status = HealthStatus.UNHEALTHY

@@ -1,8 +1,8 @@
 """Application configuration and settings."""
 
 import os
-from typing import List, Optional, Dict, Any
-from pydantic import BaseSettings, AnyHttpUrl, validator
+from typing import List, Optional, Dict, Any, Union
+from pydantic import BaseModel, AnyHttpUrl, field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -32,17 +32,17 @@ class Settings(BaseSettings):
     DATABASE_URL: Optional[str] = None
     POSTGRES_SERVER: str = "localhost"
     POSTGRES_USER: str = "{{cookiecutter.database_user}}"
-    POSTGRES_PASSWORD: str
+    POSTGRES_PASSWORD: str = ""
     POSTGRES_DB: str = "{{cookiecutter.database_name}}"
     POSTGRES_PORT: str = "5432"
     DATABASE_POOL_SIZE: int = 5
     DATABASE_MAX_OVERFLOW: int = 10
     
-    @validator("DATABASE_URL", pre=True)
-    def assemble_db_connection(cls, v: Optional[str], values: dict) -> str:
-        if isinstance(v, str):
-            return v
-        return f"postgresql://{values.get('POSTGRES_USER')}:{values.get('POSTGRES_PASSWORD')}@{values.get('POSTGRES_SERVER')}:{values.get('POSTGRES_PORT')}/{values.get('POSTGRES_DB')}"
+    @model_validator(mode="after")
+    def assemble_db_connection(self) -> "Settings":
+        if self.DATABASE_URL is None:
+            self.DATABASE_URL = f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+        return self
     
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
@@ -57,8 +57,9 @@ class Settings(BaseSettings):
     # CORS
     BACKEND_CORS_ORIGINS: List[AnyHttpUrl] = []
     
-    @validator("BACKEND_CORS_ORIGINS", pre=True)
-    def assemble_cors_origins(cls, v: str | List[str]) -> List[str]:
+    @field_validator("BACKEND_CORS_ORIGINS", mode="before")
+    @classmethod
+    def assemble_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:
         if isinstance(v, str) and not v.startswith("["):
             return [i.strip() for i in v.split(",")]
         elif isinstance(v, list):
@@ -77,6 +78,11 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: Optional[str] = None
     ANTHROPIC_MODEL_DEFAULT: str = "claude-3-sonnet-20240229"
     ANTHROPIC_MAX_TOKENS: int = 4096
+    
+    GEMINI_API_KEY: Optional[str] = None
+    GEMINI_MODEL_DEFAULT: str = "gemini-1.5-flash"
+    GEMINI_MAX_TOKENS: int = 4096
+    GEMINI_TEMPERATURE: float = 0.7
     
     # AI Service Configuration
     AI_REQUEST_TIMEOUT: int = 60
@@ -134,8 +140,9 @@ class Settings(BaseSettings):
     # Environment-specific settings
     ENVIRONMENT: str = "development"
     
-    @validator("ENVIRONMENT")
-    def validate_environment(cls, v):
+    @field_validator("ENVIRONMENT")
+    @classmethod
+    def validate_environment(cls, v: str) -> str:
         allowed = ["development", "staging", "production"]
         if v not in allowed:
             raise ValueError(f"Environment must be one of {allowed}")
@@ -178,11 +185,20 @@ class Settings(BaseSettings):
                 "model": self.ANTHROPIC_MODEL_DEFAULT,
                 "max_tokens": self.ANTHROPIC_MAX_TOKENS,
             }
+        elif provider.lower() == "gemini":
+            return {
+                "api_key": self.GEMINI_API_KEY,
+                "model": self.GEMINI_MODEL_DEFAULT,
+                "max_tokens": self.GEMINI_MAX_TOKENS,
+                "temperature": self.GEMINI_TEMPERATURE,
+            }
         return {}
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
+    model_config = {
+        "env_file": ".env",
+        "case_sensitive": True,
+        "extra": "ignore"
+    }
 
 
 settings = Settings()
