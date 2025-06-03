@@ -106,6 +106,7 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     LOG_FORMAT: str = "json"
     LOG_FILE: Optional[str] = None
+    LOG_SAMPLING_RATE: float = 1.0  # 1.0 = log all, 0.1 = log 10%
     
     # Metrics & Telemetry
     METRICS_ENABLED: bool = True

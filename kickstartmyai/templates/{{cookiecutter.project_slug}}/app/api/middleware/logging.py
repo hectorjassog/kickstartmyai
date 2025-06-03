@@ -151,6 +151,8 @@ def setup_logging():
                 # Add extra fields
                 if hasattr(record, "request_id"):
                     log_obj["request_id"] = record.request_id
+                if hasattr(record, "correlation_id"):
+                    log_obj["correlation_id"] = record.correlation_id
                 if hasattr(record, "user_id"):
                     log_obj["user_id"] = record.user_id
                 if hasattr(record, "method"):
@@ -189,7 +191,12 @@ def setup_logging():
     
     # Add file handler if specified
     if settings.LOG_FILE:
-        file_handler = logging.FileHandler(settings.LOG_FILE)
+        from logging.handlers import RotatingFileHandler
+        file_handler = RotatingFileHandler(
+            settings.LOG_FILE,
+            maxBytes=10*1024*1024,  # 10MB
+            backupCount=5
+        )
         file_handler.setFormatter(formatter)
         root_logger.addHandler(file_handler)
     
