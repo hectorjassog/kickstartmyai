@@ -7,7 +7,7 @@ from app.ai.providers.factory import get_ai_provider
 from app.ai.providers.base import ChatMessage
 from app.models.conversation import Conversation
 from app.models.message import Message, MessageRole
-from app.crud.message import create_message
+from app.crud.message import message_crud
 from app.schemas.message import MessageCreate
 
 
@@ -38,7 +38,7 @@ class ChatService:
             role=MessageRole.USER,
             conversation_id=conversation.id
         )
-        create_message(db=db, obj_in=user_msg_create)
+        message_crud.create(db=db, obj_in=user_msg_create)
         
         # Generate AI response
         response = await self.provider.chat_completion(
@@ -53,7 +53,7 @@ class ChatService:
             role=MessageRole.ASSISTANT,
             conversation_id=conversation.id
         )
-        create_message(db=db, obj_in=ai_msg_create)
+        message_crud.create(db=db, obj_in=ai_msg_create)
         
         return response.content
     
@@ -78,7 +78,7 @@ class ChatService:
             role=MessageRole.USER,
             conversation_id=conversation.id
         )
-        create_message(db=db, obj_in=user_msg_create)
+        message_crud.create(db=db, obj_in=user_msg_create)
         
         # Collect full response for saving
         full_response = ""
@@ -98,7 +98,7 @@ class ChatService:
             role=MessageRole.ASSISTANT,
             conversation_id=conversation.id
         )
-        create_message(db=db, obj_in=ai_msg_create)
+        message_crud.create(db=db, obj_in=ai_msg_create)
     
     def _get_conversation_messages(self, conversation: Conversation) -> List[ChatMessage]:
         """Convert conversation messages to ChatMessage format."""

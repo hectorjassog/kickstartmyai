@@ -18,6 +18,11 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 
+class ToolError(Exception):
+    """Exception raised when tool execution fails."""
+    pass
+
+
 class ToolParameterType(str, Enum):
     """Tool parameter types."""
     STRING = "string"

@@ -13,8 +13,9 @@ from pydantic import BaseModel, Field
 from .memory import Memory, MemoryType
 from .executor import ToolExecutor
 from .orchestrator import WorkflowOrchestrator
-from ..providers.base import BaseAIProvider, ChatMessage, MessageRole
+from ..providers.base import BaseAIProvider, ChatMessage
 from ..tools.base import BaseTool
+from app.models.message import MessageRole
 
 
 class AgentConfig(BaseModel):

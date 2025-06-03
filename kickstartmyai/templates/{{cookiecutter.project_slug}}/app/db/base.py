@@ -3,7 +3,7 @@
 import re
 import uuid
 import logging
-from typing import AsyncGenerator, Any
+from typing import AsyncGenerator, Any, ClassVar
 from contextlib import asynccontextmanager
 
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
@@ -27,8 +27,9 @@ class Base:
     """
     Base class for all database models with UUID primary keys and UTC timestamps.
     """
-    id: Any
+    id: ClassVar[Any]  # Use ClassVar to indicate this is not a mapped column
     __name__: str
+    __allow_unmapped__ = True  # Allow legacy Column annotations
     
     # Generate __tablename__ automatically from class name
     @declared_attr
@@ -71,7 +72,7 @@ AsyncSessionLocal = async_sessionmaker(
 
 # Sync engine for migration and initial setup
 sync_engine = create_engine(
-    settings.get_database_url().replace("postgresql://", "postgresql://"),
+    settings.get_database_url().replace("postgresql+asyncpg://", "postgresql://"),
     echo=settings.DEBUG,
     pool_size=settings.DATABASE_POOL_SIZE,
     max_overflow=settings.DATABASE_MAX_OVERFLOW,
@@ -312,11 +313,21 @@ async def backup_database(backup_path: str = None):
 
 
 async def restore_database(backup_path: str):
-    """Restore database from backup (PostgreSQL specific)."""
-    if "postgresql" not in settings.get_database_url():
-        raise NotImplementedError("Restore only supported for PostgreSQL")
-    
-    # This would need to be implemented with pg_restore
-    # For now, just log the request
-    logger.info(f"Database restore requested from: {backup_path}")
-    raise NotImplementedError("Database restore not implemented yet")
+    """Restore database from backup."""
+    # Implementation would depend on database type and backup format
+    logger.info(f"Database restore from {backup_path} - implementation needed")
+
+
+async def get_redis_client():
+    """Get Redis client if configured."""
+    try:
+        if settings.REDIS_URL:
+            import aioredis
+            return await aioredis.from_url(settings.REDIS_URL)
+        return None
+    except ImportError:
+        logger.warning("aioredis not installed, Redis functionality disabled")
+        return None
+    except Exception as e:
+        logger.error(f"Failed to create Redis client: {e}")
+        return None

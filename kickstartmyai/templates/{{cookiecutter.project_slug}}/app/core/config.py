@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "{{cookiecutter.project_name}}"
     PROJECT_SLUG: str = "{{cookiecutter.project_slug}}"
     VERSION: str = "{{cookiecutter.version}}"
-    DESCRIPTION: str = "{{cookiecutter.description}}"
+    DESCRIPTION: str = "{{cookiecutter.project_description}}"
     DEBUG: bool = False
     API_V1_STR: str = "/api/v1"
     
@@ -144,7 +144,7 @@ class Settings(BaseSettings):
     @field_validator("ENVIRONMENT")
     @classmethod
     def validate_environment(cls, v: str) -> str:
-        allowed = ["development", "staging", "production"]
+        allowed = ["development", "staging", "production", "testing"]
         if v not in allowed:
             raise ValueError(f"Environment must be one of {allowed}")
         return v
@@ -163,6 +163,10 @@ class Settings(BaseSettings):
     def is_development(self) -> bool:
         """Check if running in development environment."""
         return self.ENVIRONMENT == "development"
+    
+    def is_testing(self) -> bool:
+        """Check if running in testing environment."""
+        return self.ENVIRONMENT == "testing"
     
     def get_database_url(self) -> str:
         """Get the complete database URL."""

@@ -310,10 +310,10 @@ class WorkflowOrchestrator:
         
         # Replace variables in prompt
         for key, value in execution.context.items():
-            prompt = prompt.replace(f"{{{key}}}", str(value))
+            prompt = prompt.replace("{" + key + "}", str(value))
         
         for key, value in execution.step_results.items():
-            prompt = prompt.replace(f"{{{key}}}", str(value))
+            prompt = prompt.replace("{" + key + "}", str(value))
         
         response = await agent.chat(
             message=prompt,
@@ -340,9 +340,9 @@ class WorkflowOrchestrator:
         for key, value in arguments.items():
             if isinstance(value, str):
                 for ctx_key, ctx_value in execution.context.items():
-                    value = value.replace(f"{{{ctx_key}}}", str(ctx_value))
+                    value = value.replace("{" + ctx_key + "}", str(ctx_value))
                 for step_key, step_value in execution.step_results.items():
-                    value = value.replace(f"{{{step_key}}}", str(step_value))
+                    value = value.replace("{" + step_key + "}", str(step_value))
             processed_args[key] = value
         
         result = await agent.executor.execute_tool(

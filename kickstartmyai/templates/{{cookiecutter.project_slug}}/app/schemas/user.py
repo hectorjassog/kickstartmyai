@@ -114,3 +114,36 @@ class User(UserInDBBase):
 class UserInDB(UserInDBBase):
     """User schema with sensitive fields."""
     hashed_password: str
+
+
+# Statistics schema
+class UserStatistics(BaseModel):
+    """User statistics schema."""
+    total_users: int
+    active_users: int
+    inactive_users: int
+    verified_users: int
+    superusers: int
+    users_created_today: int
+    users_created_this_week: int
+    users_created_this_month: int
+
+
+# Filter schema
+class UserFilter(BaseModel):
+    """User filter schema for complex queries."""
+    email: Optional[str] = None
+    full_name: Optional[str] = None
+    is_active: Optional[bool] = None
+    is_superuser: Optional[bool] = None
+    is_verified: Optional[bool] = None
+    created_after: Optional[datetime] = None
+    created_before: Optional[datetime] = None
+
+
+# Activation schema
+class UserActivation(BaseModel):
+    """User activation schema."""
+    user_id: UUID
+    activation_token: str
+    is_active: bool = True

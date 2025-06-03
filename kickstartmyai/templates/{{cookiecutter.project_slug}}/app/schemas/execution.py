@@ -73,6 +73,10 @@ class Execution(ExecutionInDBBase):
     pass
 
 
+# Alias for backward compatibility
+ExecutionResponse = Execution
+
+
 # Additional properties stored in DB
 class ExecutionInDB(ExecutionInDBBase):
     """Execution schema in database."""
@@ -159,5 +163,45 @@ class ExecutionStatusUpdate(BaseModel):
     cost: Optional[Decimal] = Field(None, ge=0)
 
 
+# Execution batch creation schema
+class ExecutionBatchCreate(BaseModel):
+    """Execution batch creation schema."""
+    executions: List[ExecutionCreate]
+    batch_name: Optional[str] = None
+    batch_description: Optional[str] = None
+
+
+# Execution batch response schema
+class ExecutionBatchResponse(BaseModel):
+    """Execution batch response schema."""
+    batch_id: str
+    total_executions: int
+    successful_executions: int
+    failed_executions: int
+    executions: List[ExecutionResponse]
+
+
+# Execution statistics response schema
+class ExecutionStatsResponse(BaseModel):
+    """Execution statistics response schema."""
+    total_executions: int
+    successful_executions: int
+    failed_executions: int
+    success_rate: float
+    average_duration_seconds: float
+    total_tokens_used: int
+    total_cost: Decimal
+    period_days: int
+
+
+# Execution tree response schema
+class ExecutionTreeResponse(BaseModel):
+    """Execution tree response schema."""
+    execution: ExecutionResponse
+    children: List["ExecutionTreeResponse"] = Field(default_factory=list)
+    depth: int = 0
+
+
 # Forward reference resolution
-ExecutionWithChildren.model_rebuild() 
+ExecutionWithChildren.model_rebuild()
+ExecutionTreeResponse.model_rebuild() 

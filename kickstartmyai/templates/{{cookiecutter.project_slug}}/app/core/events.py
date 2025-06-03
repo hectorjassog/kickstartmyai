@@ -7,11 +7,12 @@ including database initialization, service setup, and cleanup.
 
 import asyncio
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Callable
 
 from app.core.config import settings
-from app.db.base import engine, async_engine, get_redis_client
+from app.db.base import sync_engine, async_engine, Base
 from app.services import agent_service, conversation_service, tool_service
+from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
 
@@ -80,17 +81,11 @@ async def initialize_database() -> None:
     try:
         # Test async database connection
         async with async_engine.connect() as conn:
-            await conn.execute("SELECT 1")
-        logger.info("Async database connection successful")
-        
-        # Test sync database connection
-        with engine.connect() as conn:
-            conn.execute("SELECT 1")
-        logger.info("Sync database connection successful")
+            await conn.execute(text("SELECT 1"))
+        logger.info("Database connection successful")
         
         # Create tables if needed (in development)
         if settings.ENVIRONMENT == "development" and settings.CREATE_TABLES_ON_STARTUP:
-            from app.models.base import Base
             async with async_engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
             logger.info("Database tables created/verified")
@@ -98,6 +93,21 @@ async def initialize_database() -> None:
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")
         raise
+
+
+async def get_redis_client():
+    """Get Redis client if configured."""
+    try:
+        if settings.REDIS_URL:
+            import aioredis
+            return await aioredis.from_url(settings.REDIS_URL)
+        return None
+    except ImportError:
+        logger.warning("aioredis not installed, Redis functionality disabled")
+        return None
+    except Exception as e:
+        logger.error(f"Failed to create Redis client: {e}")
+        return None
 
 
 async def initialize_redis() -> None:
@@ -151,13 +161,13 @@ async def initialize_background_services() -> None:
     """Initialize background services and tasks."""
     try:
         # Initialize cleanup tasks
-        if settings.ENABLE_CLEANUP_TASKS:
+        if getattr(settings, 'ENABLE_CLEANUP_TASKS', False):
             cleanup_task = asyncio.create_task(run_cleanup_tasks())
             event_manager.background_tasks.append(cleanup_task)
             logger.info("Background cleanup tasks started")
         
         # Initialize monitoring tasks
-        if settings.ENABLE_MONITORING:
+        if getattr(settings, 'ENABLE_MONITORING', False):
             monitoring_task = asyncio.create_task(run_monitoring_tasks())
             event_manager.background_tasks.append(monitoring_task)
             logger.info("Background monitoring tasks started")
@@ -184,7 +194,7 @@ async def run_cleanup_tasks() -> None:
                     logger.info(f"Cleaned up {cleaned} old conversations")
             
             # Wait for next cleanup cycle
-            await asyncio.sleep(settings.CLEANUP_INTERVAL)
+            await asyncio.sleep(getattr(settings, 'CLEANUP_INTERVAL', 3600))
             
         except asyncio.CancelledError:
             logger.info("Cleanup tasks cancelled")
@@ -204,7 +214,7 @@ async def run_monitoring_tasks() -> None:
             # Check database health
             try:
                 async with async_engine.connect() as conn:
-                    await conn.execute("SELECT 1")
+                    await conn.execute(text("SELECT 1"))
                 logger.debug("Database health check passed")
             except Exception as e:
                 logger.error(f"Database health check failed: {e}")
@@ -232,7 +242,7 @@ async def cleanup_database() -> None:
     """Clean up database connections."""
     try:
         await async_engine.dispose()
-        engine.dispose()
+        sync_engine.dispose()
         logger.info("Database connections closed")
     except Exception as e:
         logger.error(f"Database cleanup failed: {e}")

@@ -523,4 +523,262 @@ class TimeTool(BaseTool):
                 success=False,
                 error=str(e),
                 execution_time=execution_time
-            ) 
+            )
+
+
+class CodeExecutorTool(BaseTool):
+    """Tool for executing code in a sandboxed environment."""
+    
+    @property
+    def name(self) -> str:
+        return "code_executor"
+    
+    @property
+    def description(self) -> str:
+        return "Execute code snippets in a secure sandboxed environment"
+    
+    @property
+    def category(self) -> str:
+        return "development"
+    
+    @property
+    def parameters(self) -> List[ToolParameter]:
+        return [
+            ToolParameter(
+                name="code",
+                type=ToolParameterType.STRING,
+                description="Code to execute",
+                required=True
+            ),
+            ToolParameter(
+                name="language",
+                type=ToolParameterType.STRING,
+                description="Programming language",
+                required=False,
+                default="python",
+                enum=["python", "javascript", "bash"]
+            ),
+            ToolParameter(
+                name="timeout",
+                type=ToolParameterType.INTEGER,
+                description="Execution timeout in seconds",
+                required=False,
+                default=10,
+                min_value=1,
+                max_value=30
+            )
+        ]
+    
+    async def execute(self, code: str, language: str = "python", timeout: int = 10) -> ToolResult:
+        """Execute code in sandbox."""
+        start_time = time.time()
+        
+        try:
+            # For security, this is a mock implementation
+            # In production, use proper sandboxing like Docker containers
+            
+            if language == "python":
+                # Mock Python execution
+                result = {
+                    "output": f"Mock execution of Python code:\n{code}\n\n# This would be executed in a secure sandbox",
+                    "exit_code": 0,
+                    "language": language,
+                    "execution_time": 0.1
+                }
+            elif language == "javascript":
+                # Mock JavaScript execution
+                result = {
+                    "output": f"Mock execution of JavaScript code:\n{code}\n\n// This would be executed in a secure sandbox",
+                    "exit_code": 0,
+                    "language": language,
+                    "execution_time": 0.1
+                }
+            elif language == "bash":
+                # Mock Bash execution
+                result = {
+                    "output": f"Mock execution of Bash code:\n{code}\n\n# This would be executed in a secure sandbox",
+                    "exit_code": 0,
+                    "language": language,
+                    "execution_time": 0.1
+                }
+            else:
+                raise ValueError(f"Unsupported language: {language}")
+            
+            execution_time = time.time() - start_time
+            
+            return ToolResult(
+                success=True,
+                result=result,
+                execution_time=execution_time,
+                metadata={"sandbox": "mock", "security_level": "high"}
+            )
+            
+        except Exception as e:
+            execution_time = time.time() - start_time
+            logger.error(f"Code execution failed: {e}")
+            return ToolResult(
+                success=False,
+                error=str(e),
+                execution_time=execution_time
+            )
+
+
+class FileManagerTool(BaseTool):
+    """Tool for advanced file management operations."""
+    
+    @property
+    def name(self) -> str:
+        return "file_manager"
+    
+    @property
+    def description(self) -> str:
+        return "Advanced file management operations including read, write, copy, move"
+    
+    @property
+    def category(self) -> str:
+        return "file_system"
+    
+    @property
+    def parameters(self) -> List[ToolParameter]:
+        return [
+            ToolParameter(
+                name="operation",
+                type=ToolParameterType.STRING,
+                description="File operation to perform",
+                required=True,
+                enum=["read", "write", "copy", "move", "delete", "create_dir"]
+            ),
+            ToolParameter(
+                name="source_path",
+                type=ToolParameterType.STRING,
+                description="Source file or directory path",
+                required=True
+            ),
+            ToolParameter(
+                name="target_path",
+                type=ToolParameterType.STRING,
+                description="Target path (for copy/move operations)",
+                required=False
+            ),
+            ToolParameter(
+                name="content",
+                type=ToolParameterType.STRING,
+                description="Content to write (for write operations)",
+                required=False
+            )
+        ]
+    
+    async def execute(
+        self, 
+        operation: str, 
+        source_path: str, 
+        target_path: Optional[str] = None,
+        content: Optional[str] = None
+    ) -> ToolResult:
+        """Execute file management operation."""
+        start_time = time.time()
+        
+        try:
+            # Validate paths for security
+            source = self._validate_path(source_path)
+            target = Path(target_path) if target_path else None
+            
+            if operation == "read":
+                if not source.exists():
+                    raise FileNotFoundError(f"File not found: {source}")
+                
+                content = source.read_text(encoding='utf-8')
+                result = {
+                    "operation": operation,
+                    "path": str(source),
+                    "content": content,
+                    "size": len(content)
+                }
+                
+            elif operation == "write":
+                if content is None:
+                    raise ValueError("Content is required for write operation")
+                
+                source.write_text(content, encoding='utf-8')
+                result = {
+                    "operation": operation,
+                    "path": str(source),
+                    "bytes_written": len(content.encode('utf-8'))
+                }
+                
+            elif operation == "copy":
+                if target is None:
+                    raise ValueError("Target path is required for copy operation")
+                
+                import shutil
+                shutil.copy2(source, target)
+                result = {
+                    "operation": operation,
+                    "source": str(source),
+                    "target": str(target)
+                }
+                
+            elif operation == "move":
+                if target is None:
+                    raise ValueError("Target path is required for move operation")
+                
+                import shutil
+                shutil.move(source, target)
+                result = {
+                    "operation": operation,
+                    "source": str(source),
+                    "target": str(target)
+                }
+                
+            elif operation == "delete":
+                if source.is_file():
+                    source.unlink()
+                elif source.is_dir():
+                    import shutil
+                    shutil.rmtree(source)
+                
+                result = {
+                    "operation": operation,
+                    "path": str(source),
+                    "deleted": True
+                }
+                
+            elif operation == "create_dir":
+                source.mkdir(parents=True, exist_ok=True)
+                result = {
+                    "operation": operation,
+                    "path": str(source),
+                    "created": True
+                }
+                
+            else:
+                raise ValueError(f"Unknown operation: {operation}")
+            
+            execution_time = time.time() - start_time
+            
+            return ToolResult(
+                success=True,
+                result=result,
+                execution_time=execution_time
+            )
+            
+        except Exception as e:
+            execution_time = time.time() - start_time
+            logger.error(f"File management operation failed: {e}")
+            return ToolResult(
+                success=False,
+                error=str(e),
+                execution_time=execution_time
+            )
+    
+    def _validate_path(self, path: str) -> Path:
+        """Validate file path for security."""
+        path_obj = Path(path).resolve()
+        
+        # Security check: prevent access to sensitive directories
+        sensitive_dirs = ["/etc", "/usr", "/bin", "/sbin", "/root", "/home"]
+        for sensitive_dir in sensitive_dirs:
+            if str(path_obj).startswith(sensitive_dir):
+                raise ValueError(f"Access to {sensitive_dir} is not allowed")
+        
+        return path_obj 

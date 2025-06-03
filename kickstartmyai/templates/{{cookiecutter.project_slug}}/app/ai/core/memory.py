@@ -489,3 +489,44 @@ class Memory:
                 memory = memories[memory_id]
                 await self._remove_from_indices(memory)
                 del memories[memory_id]
+
+
+class MemoryManager(Memory):
+    """
+    Memory manager class that extends the base Memory class.
+    
+    This class provides a higher-level interface for managing agent memory
+    with additional features for agent-specific operations.
+    """
+    
+    def __init__(
+        self,
+        agent_id: str,
+        max_items: int = 1000,
+        **kwargs
+    ):
+        """
+        Initialize the memory manager.
+        
+        Args:
+            agent_id: ID of the agent this memory belongs to
+            max_items: Maximum number of items to store
+            **kwargs: Additional arguments passed to Memory
+        """
+        super().__init__(max_entries_per_type=max_items, **kwargs)
+        self.agent_id = agent_id
+    
+    async def clear_all_memories(self) -> None:
+        """Clear all memories for this agent."""
+        for memory_type in MemoryType:
+            self.memories[memory_type].clear()
+        
+        self.conversations.clear()
+        self.tags_index.clear()
+        self.content_index.clear()
+    
+    async def get_memory_stats(self) -> Dict[str, Any]:
+        """Get memory statistics for this agent."""
+        stats = await super().get_memory_stats()
+        stats["agent_id"] = self.agent_id
+        return stats

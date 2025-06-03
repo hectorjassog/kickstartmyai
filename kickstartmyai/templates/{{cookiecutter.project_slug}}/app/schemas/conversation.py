@@ -49,6 +49,25 @@ class Conversation(ConversationInDBBase):
     pass
 
 
+# Conversation response schema for API responses
+class ConversationResponse(ConversationInDBBase):
+    """Conversation response schema for API responses."""
+    model_config = ConfigDict(from_attributes=True)
+    
+    # Include all fields from ConversationInDBBase
+    id: UUID
+    user_id: UUID
+    title: str
+    description: Optional[str] = None
+    agent_id: Optional[UUID] = None
+    is_active: bool
+    message_count: int
+    last_message_at: Optional[datetime] = None
+    metadata: Dict[str, Any]
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+
 # Additional properties stored in DB
 class ConversationInDB(ConversationInDBBase):
     """Conversation schema in database."""

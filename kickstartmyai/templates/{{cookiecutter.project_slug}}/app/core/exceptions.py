@@ -13,6 +13,10 @@ class BaseAppException(Exception):
         super().__init__(self.message)
 
 
+# Alias for backward compatibility and cleaner imports
+AppException = BaseAppException
+
+
 class HTTPAppException(HTTPException):
     """Custom HTTP exception with additional details."""
     
@@ -479,16 +483,21 @@ class ServiceUnavailableError(HTTPAppException):
 
 
 class MaintenanceModeError(HTTPAppException):
-    """Application in maintenance mode."""
+    """Application is in maintenance mode."""
     
     def __init__(self, estimated_duration: Optional[int] = None):
-        detail = "Application is in maintenance mode"
+        detail = "Application is currently under maintenance"
         if estimated_duration:
-            detail += f" (estimated duration: {estimated_duration} minutes)"
+            detail += f". Estimated duration: {estimated_duration} minutes"
         
         super().__init__(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=detail,
-            error_code="SRV_003",
+            error_code="SYS_003",
             error_data={"estimated_duration": estimated_duration}
         )
+
+
+# Aliases for backward compatibility
+ResourceNotFoundError = NotFoundError
+RateLimitError = RateLimitExceededError

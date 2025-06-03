@@ -55,7 +55,7 @@ class Agent(Base):
     
     # Configuration and context
     config = Column(JSON, default=dict, nullable=False)  # Additional configuration
-    metadata = Column(JSON, default=dict, nullable=False)  # Custom metadata
+    agent_metadata = Column(JSON, default=dict, nullable=False)  # Custom metadata
     
     # Foreign keys
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
@@ -77,13 +77,13 @@ class Agent(Base):
     
     def get_metadata_value(self, key: str, default: Any = None) -> Any:
         """Get a metadata value."""
-        return self.metadata.get(key, default)
+        return self.agent_metadata.get(key, default)
     
     def set_metadata_value(self, key: str, value: Any) -> None:
         """Set a metadata value."""
-        if self.metadata is None:
-            self.metadata = {}
-        self.metadata[key] = value
+        if self.agent_metadata is None:
+            self.agent_metadata = {}
+        self.agent_metadata[key] = value
     
     def increment_usage(self) -> None:
         """Increment the usage count."""

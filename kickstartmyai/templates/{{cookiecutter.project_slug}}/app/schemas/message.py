@@ -47,6 +47,21 @@ class Message(MessageInDBBase):
     pass
 
 
+# Message response schema for API responses
+class MessageResponse(MessageInDBBase):
+    """Message response schema for API responses."""
+    model_config = ConfigDict(from_attributes=True)
+    
+    # Include all required fields
+    id: UUID
+    conversation_id: UUID
+    content: str
+    role: MessageRole
+    metadata: Dict[str, Any]
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+
 # Additional properties stored in DB
 class MessageInDB(MessageInDBBase):
     """Message schema in database."""

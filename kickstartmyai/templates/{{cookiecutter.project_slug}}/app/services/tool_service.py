@@ -81,7 +81,7 @@ class ToolService:
     
     def __init__(self):
         self.registered_tools: Dict[str, BaseTool] = {}
-        self.tool_categories: Dict[str, ToolCategory] = {}
+        self.tool_categories: Dict[str, Union[ToolCategory, str]] = {}
         self.usage_stats: Dict[str, Dict[str, Any]] = {}
         self.security_policies: Dict[str, Dict[str, Any]] = {}
         self.execution_history: List[Dict[str, Any]] = []
@@ -123,19 +123,19 @@ class ToolService:
         try:
             # Register web search tool
             web_search_tool = WebSearchTool()
-            self.register_tool(web_search_tool, ToolCategory.WEB_SEARCH)
+            self.register_tool(web_search_tool, web_search_tool.category)
             
             # Register code executor tool
             code_executor_tool = CodeExecutorTool()
-            self.register_tool(code_executor_tool, ToolCategory.CODE_EXECUTION)
+            self.register_tool(code_executor_tool, code_executor_tool.category)
             
             # Register file manager tool
             file_manager_tool = FileManagerTool()
-            self.register_tool(file_manager_tool, ToolCategory.FILE_MANAGEMENT)
+            self.register_tool(file_manager_tool, file_manager_tool.category)
             
             # Register database tool
             database_tool = DatabaseTool()
-            self.register_tool(database_tool, ToolCategory.DATABASE)
+            self.register_tool(database_tool, database_tool.category)
             
             logger.info("Initialized default tools")
             
@@ -145,7 +145,7 @@ class ToolService:
     def register_tool(
         self,
         tool: BaseTool,
-        category: ToolCategory,
+        category: Union[ToolCategory, str],
         security_policy: Optional[Dict[str, Any]] = None
     ) -> None:
         """
@@ -153,7 +153,7 @@ class ToolService:
         
         Args:
             tool: Tool instance to register
-            category: Tool category
+            category: Tool category (enum or string)
             security_policy: Optional custom security policy
         """
         tool_name = tool.name
@@ -165,11 +165,17 @@ class ToolService:
         self.registered_tools[tool_name] = tool
         self.tool_categories[tool_name] = category
         
+        # Handle both enum and string categories for security policy lookup
+        if hasattr(category, 'value'):
+            category_key = category.value
+        else:
+            category_key = str(category)
+        
         # Set up security policy
         if security_policy:
             self.security_policies[tool_name] = security_policy
-        elif category.value in self.default_security_policies:
-            self.security_policies[tool_name] = self.default_security_policies[category.value]
+        elif category_key in self.default_security_policies:
+            self.security_policies[tool_name] = self.default_security_policies[category_key]
         
         # Initialize usage stats
         self.usage_stats[tool_name] = {
@@ -181,7 +187,7 @@ class ToolService:
             "errors": []
         }
         
-        logger.info(f"Registered tool: {tool_name} ({category.value})")
+        logger.info(f"Registered tool: {tool_name} ({category_key})")
     
     def unregister_tool(self, tool_name: str) -> bool:
         """
@@ -210,7 +216,7 @@ class ToolService:
     
     def get_available_tools(
         self,
-        category: Optional[ToolCategory] = None,
+        category: Optional[Union[ToolCategory, str]] = None,
         include_disabled: bool = False
     ) -> List[Dict[str, Any]]:
         """
@@ -236,10 +242,18 @@ class ToolService:
             if not include_disabled and not getattr(tool, 'enabled', True):
                 continue
             
+            # Handle both enum and string categories
+            if hasattr(tool_category, 'value'):
+                category_str = tool_category.value
+            elif tool_category:
+                category_str = str(tool_category)
+            else:
+                category_str = "unknown"
+            
             tool_info = {
                 "name": tool_name,
                 "description": tool.description,
-                "category": tool_category.value if tool_category else "unknown",
+                "category": category_str,
                 "parameters": tool.parameters,
                 "required_params": getattr(tool, 'required_params', []),
                 "enabled": getattr(tool, 'enabled', True)

@@ -1,6 +1,6 @@
 # {{cookiecutter.project_name}} - Development Makefile
 
-.PHONY: help install install-dev setup clean test test-cov lint format type-check pre-commit run-dev run-prod build docker-build docker-run docker-up docker-down db-init db-create db-migrate db-upgrade db-downgrade db-reset deploy-dev deploy-prod
+.PHONY: help install install-dev setup clean test test-cov lint format type-check pre-commit run-dev run-prod build docker-build docker-run docker-up docker-down db-init db-create db-migrate db-upgrade db-downgrade db-reset db-fresh db-status db-info db-validate-models db-fix-models db-help deploy-dev deploy-prod
 
 # Default target
 help:
@@ -35,12 +35,16 @@ help:
 	@echo "  docker-down   Stop Docker Compose services"
 	@echo ""
 	@echo "Database:"
-	@echo "  db-init       Initialize database (first time setup)"
-	@echo "  db-create     Create database"
-	@echo "  db-migrate    Create new migration"
+	@echo "  db-init       Initialize database migrations (first time setup)"
+	@echo "  db-create     Create initial migration for all tables"
+	@echo "  db-migrate    Generate new migration"
 	@echo "  db-upgrade    Apply migrations"
 	@echo "  db-downgrade  Rollback migration"
-	@echo "  db-reset      Reset database"
+	@echo "  db-reset      Reset database (destructive)"
+	@echo "  db-fresh      Fresh start (destructive)"
+	@echo "  db-status     Check migration status"
+	@echo "  db-info       Show database info"
+	@echo "  db-help       Show detailed database commands"
 	@echo ""
 	@echo "Deployment:"
 	@echo "  deploy-dev    Deploy to development"
@@ -119,30 +123,67 @@ docker-down:
 docker-logs:
 	docker-compose logs -f
 
-# Database
+# Database Management
 db-init:
-	@echo "🚀 Initializing database for the first time..."
-	python scripts/database/init_db.py
+	@echo "🚀 Initializing database migrations..."
+	./scripts/database/migrate.sh init
 
 db-create:
-	python scripts/database/create_db.py
+	@echo "📄 Creating initial migration..."
+	./scripts/database/migrate.sh create-initial
 
 db-migrate:
-	@if [ -z "$(msg)" ]; then \
-		echo "Error: Please provide a migration message. Usage: make db-migrate msg='Your migration message'"; \
-		exit 1; \
-	fi
-	alembic revision --autogenerate -m "$(msg)"
+	@echo "🔨 Generating new migration..."
+	@read -p "Migration message: " msg; \
+	./scripts/database/migrate.sh generate "$$msg"
 
 db-upgrade:
-	alembic upgrade head
+	@echo "⬆️  Upgrading database..."
+	./scripts/database/migrate.sh upgrade
 
 db-downgrade:
-	alembic downgrade -1
+	@echo "⬇️  Downgrading database..."
+	@read -p "Target revision (e.g., -1): " rev; \
+	./scripts/database/migrate.sh downgrade "$$rev"
 
 db-reset:
-	python scripts/database/reset_db.py
-	alembic upgrade head
+	@echo "🔄 Resetting database..."
+	./scripts/database/migrate.sh reset
+
+db-fresh:
+	@echo "🆕 Fresh database start..."
+	./scripts/database/migrate.sh fresh
+
+db-status:
+	@echo "📊 Checking migration status..."
+	python scripts/database/migration_utils.py status
+
+db-info:
+	@echo "📋 Database information..."
+	python scripts/database/migration_utils.py info
+
+db-validate-models:
+	@echo "🔍 Validating model imports..."
+	./scripts/database/migrate.sh validate-models
+
+db-fix-models:
+	@echo "🔧 Fixing model imports..."
+	./scripts/database/migrate.sh fix-models
+
+db-help:
+	@echo "Database Management Commands"
+	@echo "============================"
+	@echo "make db-init            - Initialize Alembic migrations"
+	@echo "make db-create          - Create initial migration for all tables"
+	@echo "make db-migrate         - Generate new migration (validates models first)"
+	@echo "make db-upgrade         - Apply migrations"
+	@echo "make db-downgrade       - Rollback migrations"
+	@echo "make db-reset           - Reset database (destructive)"
+	@echo "make db-fresh           - Fresh start (destructive)"
+	@echo "make db-status          - Check migration status"
+	@echo "make db-info            - Show database info"
+	@echo "make db-validate-models - Validate model imports in __init__.py"
+	@echo "make db-fix-models      - Auto-fix model imports in __init__.py"
 
 # Deployment
 deploy-dev:
