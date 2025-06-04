@@ -1,6 +1,6 @@
 """JWT token handling."""
 
-import jwt
+from jose import jwt, JWTError
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 
@@ -64,7 +64,7 @@ def verify_token(token: str) -> Optional[Dict[str, Any]]:
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
         return payload
-    except jwt.PyJWTError:
+    except JWTError:
         return None
 
 
@@ -79,7 +79,6 @@ def decode_token(token: str) -> Dict[str, Any]:
         Decoded token payload
         
     Raises:
-        jwt.ExpiredSignatureError: If token is expired
-        jwt.PyJWTError: If token is invalid
+        JWTError: If token is invalid or expired
     """
     return jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])

@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     POSTGRES_PORT: str = "5432"
     DATABASE_POOL_SIZE: int = 5
     DATABASE_MAX_OVERFLOW: int = 10
+    CREATE_TABLES_ON_STARTUP: bool = True
     
     @model_validator(mode="after")
     def assemble_db_connection(self) -> "Settings":

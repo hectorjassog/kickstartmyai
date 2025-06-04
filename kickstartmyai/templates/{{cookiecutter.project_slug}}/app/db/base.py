@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.ext.declarative import as_declarative, declared_attr
 from sqlalchemy.orm import Session
-from sqlalchemy import event, create_engine, Column, DateTime, MetaData
+from sqlalchemy import event, create_engine, Column, DateTime, MetaData, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from sqlalchemy.pool import NullPool, QueuePool
@@ -52,14 +52,53 @@ class Base:
     )
 
 # Async engine for modern async operations
-async_engine = create_async_engine(
-    settings.get_database_url(),
-    echo=settings.DEBUG,
-    pool_size=settings.DATABASE_POOL_SIZE,
-    max_overflow=settings.DATABASE_MAX_OVERFLOW,
-    pool_pre_ping=True,
-    pool_recycle=3600,  # Recycle connections every hour
-)
+database_url = settings.get_database_url()
+
+# Handle SQLite URLs for async operations
+if database_url.startswith("sqlite"):
+    # For SQLite, use aiosqlite for async support
+    async_database_url = database_url.replace("sqlite://", "sqlite+aiosqlite://")
+    sync_database_url = database_url
+    
+    # SQLite doesn't support connection pooling
+    async_engine = create_async_engine(
+        async_database_url,
+        echo=settings.DEBUG,
+        pool_pre_ping=True,
+    )
+    
+    # Sync engine for migration and initial setup
+    sync_engine = create_engine(
+        sync_database_url,
+        echo=settings.DEBUG,
+        pool_pre_ping=True,
+    )
+else:
+    # For PostgreSQL, use asyncpg for async and psycopg2 for sync
+    if "postgresql+asyncpg://" not in database_url:
+        async_database_url = database_url.replace("postgresql://", "postgresql+asyncpg://")
+    else:
+        async_database_url = database_url
+    sync_database_url = database_url.replace("postgresql+asyncpg://", "postgresql://")
+    
+    async_engine = create_async_engine(
+        async_database_url,
+        echo=settings.DEBUG,
+        pool_size=settings.DATABASE_POOL_SIZE,
+        max_overflow=settings.DATABASE_MAX_OVERFLOW,
+        pool_pre_ping=True,
+        pool_recycle=3600,  # Recycle connections every hour
+    )
+    
+    # Sync engine for migration and initial setup
+    sync_engine = create_engine(
+        sync_database_url,
+        echo=settings.DEBUG,
+        pool_size=settings.DATABASE_POOL_SIZE,
+        max_overflow=settings.DATABASE_MAX_OVERFLOW,
+        pool_pre_ping=True,
+        pool_recycle=3600,
+    )
 
 # Async session factory
 AsyncSessionLocal = async_sessionmaker(
@@ -68,16 +107,6 @@ AsyncSessionLocal = async_sessionmaker(
     expire_on_commit=False,
     autoflush=True,
     autocommit=False,
-)
-
-# Sync engine for migration and initial setup
-sync_engine = create_engine(
-    settings.get_database_url().replace("postgresql+asyncpg://", "postgresql://"),
-    echo=settings.DEBUG,
-    pool_size=settings.DATABASE_POOL_SIZE,
-    max_overflow=settings.DATABASE_MAX_OVERFLOW,
-    pool_pre_ping=True,
-    pool_recycle=3600,
 )
 
 # Sync session for migrations
@@ -149,7 +178,8 @@ async def check_db_connection() -> bool:
     """Check if database connection is working."""
     try:
         async with async_engine.begin() as conn:
-            await conn.execute("SELECT 1")
+            # Use text() wrapper for raw SQL
+            await conn.execute(text("SELECT 1"))
         return True
     except Exception as e:
         logger.error(f"Database connection check failed: {e}")
@@ -266,28 +296,42 @@ db_manager = DatabaseManager()
 async def execute_query(query: str, params: dict = None):
     """Execute a raw SQL query."""
     async with get_db_session() as session:
-        result = await session.execute(query, params or {})
+        result = await session.execute(text(query), params or {})
         return result
 
 
 async def execute_scalar(query: str, params: dict = None):
     """Execute a query and return a scalar result."""
     async with get_db_session() as session:
-        result = await session.execute(query, params or {})
+        result = await session.execute(text(query), params or {})
         return result.scalar()
 
 
 async def table_exists(table_name: str) -> bool:
     """Check if a table exists in the database."""
-    query = """
-    SELECT EXISTS (
-        SELECT FROM information_schema.tables 
-        WHERE table_name = :table_name
-    );
-    """
+    database_url = settings.get_database_url()
+    
+    if database_url.startswith("sqlite"):
+        # SQLite query
+        query = """
+        SELECT name FROM sqlite_master 
+        WHERE type='table' AND name = :table_name;
+        """
+    else:
+        # PostgreSQL query
+        query = """
+        SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE table_name = :table_name
+        );
+        """
+    
     try:
         result = await execute_scalar(query, {"table_name": table_name})
-        return bool(result)
+        if database_url.startswith("sqlite"):
+            return result is not None
+        else:
+            return bool(result)
     except Exception:
         return False
 

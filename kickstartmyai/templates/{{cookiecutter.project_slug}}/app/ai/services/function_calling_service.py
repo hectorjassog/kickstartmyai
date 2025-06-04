@@ -26,6 +26,11 @@ class FunctionCallingService:
         Args:
             tool: Tool to register
         """
+        # Check if already registered
+        if tool.name in self.function_definitions:
+            logger.warning(f"Tool '{tool.name}' is already registered, skipping")
+            return
+            
         try:
             # Register with tool registry
             self.tool_registry.register(tool)
@@ -42,6 +47,20 @@ class FunctionCallingService:
             
             logger.info(f"Registered function: {tool.name}")
             
+        except ValueError as e:
+            # Tool already registered in registry, just create function definition
+            if "already registered" in str(e):
+                logger.warning(f"Tool '{tool.name}' already in registry, updating function definition")
+                function_def = {
+                    "name": tool.name,
+                    "description": tool.description,
+                    "parameters": self._convert_tool_parameters(tool)
+                }
+                self.function_definitions[tool.name] = function_def
+                self.registered_functions[tool.name] = tool.execute
+            else:
+                logger.error(f"Failed to register tool {tool.name}: {e}")
+                raise
         except Exception as e:
             logger.error(f"Failed to register tool {tool.name}: {e}")
             raise

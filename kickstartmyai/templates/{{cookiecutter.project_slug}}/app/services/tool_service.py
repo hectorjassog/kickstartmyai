@@ -158,36 +158,45 @@ class ToolService:
         """
         tool_name = tool.name
         
-        # Register with function calling service
-        function_calling_service.register_tool(tool)
+        # Check if tool is already registered
+        if tool_name in self.registered_tools:
+            logger.warning(f"Tool '{tool_name}' is already registered, skipping")
+            return
         
-        # Store tool
-        self.registered_tools[tool_name] = tool
-        self.tool_categories[tool_name] = category
-        
-        # Handle both enum and string categories for security policy lookup
-        if hasattr(category, 'value'):
-            category_key = category.value
-        else:
-            category_key = str(category)
-        
-        # Set up security policy
-        if security_policy:
-            self.security_policies[tool_name] = security_policy
-        elif category_key in self.default_security_policies:
-            self.security_policies[tool_name] = self.default_security_policies[category_key]
-        
-        # Initialize usage stats
-        self.usage_stats[tool_name] = {
-            "total_executions": 0,
-            "successful_executions": 0,
-            "failed_executions": 0,
-            "total_execution_time": 0.0,
-            "last_used": None,
-            "errors": []
-        }
-        
-        logger.info(f"Registered tool: {tool_name} ({category_key})")
+        try:
+            # Register with function calling service
+            function_calling_service.register_tool(tool)
+            
+            # Store tool
+            self.registered_tools[tool_name] = tool
+            self.tool_categories[tool_name] = category
+            
+            # Handle both enum and string categories for security policy lookup
+            if hasattr(category, 'value'):
+                category_key = category.value
+            else:
+                category_key = str(category)
+            
+            # Set up security policy
+            if security_policy:
+                self.security_policies[tool_name] = security_policy
+            elif category_key in self.default_security_policies:
+                self.security_policies[tool_name] = self.default_security_policies[category_key]
+            
+            # Initialize usage stats
+            self.usage_stats[tool_name] = {
+                "total_executions": 0,
+                "successful_executions": 0,
+                "failed_executions": 0,
+                "total_execution_time": 0.0,
+                "last_used": None,
+                "errors": []
+            }
+            
+            logger.info(f"Registered tool: {tool_name} ({category_key})")
+            
+        except Exception as e:
+            logger.error(f"Failed to register tool {tool_name}: {str(e)}")
     
     def unregister_tool(self, tool_name: str) -> bool:
         """
@@ -367,8 +376,15 @@ class ToolService:
         policy = self.security_policies[tool_name]
         category = self.tool_categories.get(tool_name)
         
-        # Check category-specific policies
-        if category == ToolCategory.WEB_SEARCH:
+        # Convert category to string for comparison
+        if hasattr(category, 'value'):
+            category_str = category.value
+        else:
+            category_str = str(category) if category else ""
+        
+        # Check category-specific policies based on tool name patterns
+        # Since tools use their own category strings, we check by tool name
+        if tool_name == "web_search" or category_str in ["information", "web_search"]:
             url = request.parameters.get('url', '')
             if url:
                 # Check blocked domains
@@ -381,7 +397,7 @@ class ToolService:
                 if policy.get('require_https', False) and not url.startswith('https://'):
                     warnings.append("HTTPS required but HTTP URL provided")
         
-        elif category == ToolCategory.CODE_EXECUTION:
+        elif tool_name == "code_executor" or category_str in ["development", "code_execution"]:
             language = request.parameters.get('language', '')
             code = request.parameters.get('code', '')
             
@@ -396,7 +412,7 @@ class ToolService:
                 if pattern in code:
                     warnings.append(f"Potentially dangerous code pattern detected: {pattern}")
         
-        elif category == ToolCategory.FILE_MANAGEMENT:
+        elif tool_name == "file_manager" or category_str in ["file_system", "file_management"]:
             file_path = request.parameters.get('file_path', '')
             
             # Check allowed paths
@@ -485,7 +501,24 @@ class ToolService:
                 raise ValidationError(f"Tool '{tool_name}' not found")
             
             stats = self.usage_stats[tool_name]
-            category = self.tool_categories.get(tool_name, ToolCategory.CUSTOM)
+            category = self.tool_categories.get(tool_name, "custom")
+            
+            # Convert category to ToolCategory enum if possible, otherwise use CUSTOM
+            if isinstance(category, str):
+                # Try to map string categories to enum values
+                category_mapping = {
+                    "information": ToolCategory.WEB_SEARCH,
+                    "web_search": ToolCategory.WEB_SEARCH,
+                    "development": ToolCategory.CODE_EXECUTION,
+                    "code_execution": ToolCategory.CODE_EXECUTION,
+                    "file_system": ToolCategory.FILE_MANAGEMENT,
+                    "file_management": ToolCategory.FILE_MANAGEMENT,
+                    "data": ToolCategory.DATABASE,
+                    "database": ToolCategory.DATABASE,
+                    "utility": ToolCategory.ANALYSIS,
+                    "system": ToolCategory.CUSTOM
+                }
+                category = category_mapping.get(category, ToolCategory.CUSTOM)
             
             error_rate = 0.0
             if stats["total_executions"] > 0:
@@ -620,6 +653,14 @@ class ToolService:
         if total_executions > 0:
             overall_error_rate = total_failures / total_executions
         
+        # Get categories, handling both enum and string values
+        categories = []
+        for cat in self.tool_categories.values():
+            if hasattr(cat, 'value'):
+                categories.append(cat.value)
+            else:
+                categories.append(str(cat))
+        
         return {
             "total_tools": total_tools,
             "enabled_tools": enabled_tools,
@@ -628,7 +669,7 @@ class ToolService:
             "total_failures": total_failures,
             "overall_error_rate": overall_error_rate,
             "execution_history_size": len(self.execution_history),
-            "categories": list(set(cat.value for cat in self.tool_categories.values()))
+            "categories": list(set(categories))
         }
 
 

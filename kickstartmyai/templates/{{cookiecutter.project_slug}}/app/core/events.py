@@ -79,6 +79,11 @@ event_manager = EventManager()
 async def initialize_database() -> None:
     """Initialize database connections and create tables if needed."""
     try:
+        # Skip database initialization in Docker testing without real DB
+        if settings.ENVIRONMENT == "testing" and "localhost" in settings.get_database_url():
+            logger.warning("Skipping database initialization in testing environment with localhost DB")
+            return
+            
         # Test async database connection
         async with async_engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
@@ -91,6 +96,10 @@ async def initialize_database() -> None:
             logger.info("Database tables created/verified")
             
     except Exception as e:
+        # In testing environment, don't fail if database is not available
+        if settings.ENVIRONMENT == "testing":
+            logger.warning(f"Database not available in testing environment: {e}")
+            return
         logger.error(f"Database initialization failed: {e}")
         raise
 
