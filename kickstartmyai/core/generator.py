@@ -384,7 +384,7 @@ OPENAI_TEMPERATURE=0.7
 
 # Anthropic Configuration
 ANTHROPIC_API_KEY=your-anthropic-api-key-here
-ANTHROPIC_MODEL_DEFAULT=claude-3-sonnet-20240229
+ANTHROPIC_MODEL_DEFAULT=claude-sonnet-4-20250514
 ANTHROPIC_MAX_TOKENS=4096
 
 # Gemini Configuration

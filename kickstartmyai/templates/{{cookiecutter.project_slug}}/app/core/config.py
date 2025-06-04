@@ -77,7 +77,7 @@ class Settings(BaseSettings):
     OPENAI_TEMPERATURE: float = 0.7
     
     ANTHROPIC_API_KEY: Optional[str] = None
-    ANTHROPIC_MODEL_DEFAULT: str = "claude-3-sonnet-20240229"
+    ANTHROPIC_MODEL_DEFAULT: str = "claude-sonnet-4-20250514"
     ANTHROPIC_MAX_TOKENS: int = 4096
     
     GEMINI_API_KEY: Optional[str] = None

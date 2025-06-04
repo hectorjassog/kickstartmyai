@@ -436,7 +436,7 @@ class TestAIProviderIntegration:
         agent_data = {
             "name": "Claude Agent",
             "ai_provider": "anthropic",
-            "model": "claude-3-sonnet-20240229",
+            "model": "claude-sonnet-4-20250514",
             "system_prompt": "You are Claude, an AI assistant.",
             "max_tokens": 2000
         }
@@ -485,7 +485,7 @@ class TestAIProviderIntegration:
         # Verify Anthropic client was called with correct parameters
         mock_anthropic_client.messages.create.assert_called()
         call_args = mock_anthropic_client.messages.create.call_args
-        assert call_args[1]["model"] == "claude-3-sonnet-20240229"
+        assert call_args[1]["model"] == "claude-sonnet-4-20250514"
         assert call_args[1]["max_tokens"] == 2000
 
 

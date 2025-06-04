@@ -186,7 +186,7 @@ def mock_anthropic_api():
                     "type": "text",
                     "text": "Hello! This is a test response from Claude."
                 }],
-                "model": "claude-3-sonnet-20240229",
+                "model": "claude-sonnet-4-20250514",
                 "stop_reason": "end_turn",
                 "stop_sequence": None,
                 "usage": {

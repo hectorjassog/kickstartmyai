@@ -240,7 +240,7 @@ from app.ai.providers import anthropic_provider
 # Claude conversation
 response = await anthropic_provider.create_message(
     messages=[{"role": "user", "content": "Explain quantum computing"}],
-    model="claude-3-sonnet-20240229",
+    model="claude-sonnet-4-20250514",
     max_tokens=1000
 )
 
@@ -636,7 +636,7 @@ class Settings(BaseSettings):
 ```python
 # Configure AI providers
 OPENAI_MODEL_DEFAULT = "gpt-4"
-ANTHROPIC_MODEL_DEFAULT = "claude-3-sonnet-20240229"
+ANTHROPIC_MODEL_DEFAULT = "claude-sonnet-4-20250514"
 GEMINI_MODEL_DEFAULT = "gemini-pro"
 
 # Model-specific settings

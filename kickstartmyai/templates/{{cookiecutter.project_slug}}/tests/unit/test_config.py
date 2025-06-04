@@ -123,7 +123,7 @@ class TestSettingsValidation:
             "OPENAI_ORG_ID": "org-12345",
             "OPENAI_MODEL_DEFAULT": "gpt-4-turbo",
             "ANTHROPIC_API_KEY": "sk-ant-test-key",
-            "ANTHROPIC_MODEL_DEFAULT": "claude-3-opus",
+            "ANTHROPIC_MODEL_DEFAULT": "claude-sonnet-4-20250514",
             "GEMINI_API_KEY": "gemini-test-key",
             "GEMINI_MODEL_DEFAULT": "gemini-pro-vision"
         }
@@ -134,7 +134,7 @@ class TestSettingsValidation:
             assert settings.OPENAI_ORG_ID == "org-12345"
             assert settings.OPENAI_MODEL_DEFAULT == "gpt-4-turbo"
             assert settings.ANTHROPIC_API_KEY == "sk-ant-test-key"
-            assert settings.ANTHROPIC_MODEL_DEFAULT == "claude-3-opus"
+            assert settings.ANTHROPIC_MODEL_DEFAULT == "claude-sonnet-4-20250514"
             assert settings.GEMINI_API_KEY == "gemini-test-key"
             assert settings.GEMINI_MODEL_DEFAULT == "gemini-pro-vision"
 
@@ -427,7 +427,7 @@ class TestSettingsDefaults:
         with patch.dict(os.environ, {"SECRET_KEY": "test-secret"}):
             settings = Settings()
             assert settings.OPENAI_MODEL_DEFAULT == "gpt-4"
-            assert settings.ANTHROPIC_MODEL_DEFAULT == "claude-3-sonnet-20240229"
+            assert settings.ANTHROPIC_MODEL_DEFAULT == "claude-sonnet-4-20250514"
             assert settings.GEMINI_MODEL_DEFAULT == "gemini-1.5-flash"
             assert settings.OPENAI_MAX_TOKENS == 4096
             assert settings.OPENAI_TEMPERATURE == 0.7

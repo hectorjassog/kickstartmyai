@@ -292,7 +292,7 @@ class TestCompleteAIPipeline:
             {
                 "name": "Anthropic Agent", 
                 "ai_provider": "anthropic",
-                "model": "claude-3-sonnet-20240229"
+                "model": "claude-sonnet-4-20250514"
             }
         ]
         
@@ -627,7 +627,7 @@ class TestAIProviderSpecificWorkflows:
         agent_data = {
             "name": "Claude Tool Agent",
             "ai_provider": "anthropic",
-            "model": "claude-3-sonnet-20240229",
+            "model": "claude-sonnet-4-20250514",
             "tools": ["calculator"]
         }
         

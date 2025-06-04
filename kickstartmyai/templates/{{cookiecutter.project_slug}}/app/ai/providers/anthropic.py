@@ -9,7 +9,7 @@ from .base import BaseAIProvider, ChatMessage, ChatResponse
 class AnthropicProvider(BaseAIProvider):
     """Anthropic provider implementation."""
     
-    def __init__(self, api_key: str, model: str = "claude-3-sonnet-20240229"):
+    def __init__(self, api_key: str, model: str = "claude-sonnet-4-20250514"):
         super().__init__(api_key, model)
         self.client = anthropic.AsyncAnthropic(api_key=api_key)
     
@@ -109,7 +109,7 @@ class AnthropicProvider(BaseAIProvider):
     def available_models(self) -> List[str]:
         """Available models."""
         return [
-            "claude-3-opus-20240229",
-            "claude-3-sonnet-20240229",
-            "claude-3-haiku-20240307"
+            "claude-opus-4-20250514",
+            "claude-sonnet-4-20250514",
+            "claude-3-5-haiku-20241022"
         ]

@@ -272,7 +272,7 @@ class TestAgentEndpoints:
         """Test getting list of agents."""
         mock_agents = [
             Agent(id=uuid4(), name="Agent 1", provider="openai", model="gpt-4", owner_id=uuid4()),
-            Agent(id=uuid4(), name="Agent 2", provider="anthropic", model="claude-3", owner_id=uuid4())
+            Agent(id=uuid4(), name="Agent 2", provider="anthropic", model="claude-4", owner_id=uuid4())
         ]
         
         with patch('app.crud.agent.agent_crud.get_multi_by_owner') as mock_get:

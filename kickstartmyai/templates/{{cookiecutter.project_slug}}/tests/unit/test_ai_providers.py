@@ -128,7 +128,7 @@ class TestAnthropicProvider:
     @pytest.fixture
     def anthropic_provider(self):
         """Create Anthropic provider instance."""
-        return AnthropicProvider(api_key="test-key", model="claude-3-sonnet-20240229")
+        return AnthropicProvider(api_key="test-key", model="claude-sonnet-4-20250514")
     
     @pytest.mark.asyncio
     async def test_chat_completion(self, anthropic_provider, mock_anthropic_api):
@@ -140,7 +140,7 @@ class TestAnthropicProvider:
         response = await anthropic_provider.chat_completion(messages)
         
         assert response.content == "Hello! This is a test response from Claude."
-        assert response.model == "claude-3-sonnet-20240229"
+        assert response.model == "claude-sonnet-4-20250514"
         assert response.usage["input_tokens"] == 10
         assert response.usage["output_tokens"] == 15
         assert response.finish_reason == "end_turn"
@@ -166,7 +166,7 @@ class TestAnthropicProvider:
         response = await anthropic_provider.chat_completion(messages, tools=tools)
         
         assert response.content == "Hello! This is a test response from Claude."
-        assert response.model == "claude-3-sonnet-20240229"
+        assert response.model == "claude-sonnet-4-20250514"
     
     @pytest.mark.asyncio
     async def test_stream_chat_completion(self, anthropic_provider):
@@ -299,9 +299,9 @@ class TestProviderFactory:
     
     def test_get_anthropic_provider(self):
         """Test getting Anthropic provider from factory."""
-        provider = get_ai_provider("anthropic", model="claude-3-sonnet-20240229")
+        provider = get_ai_provider("anthropic", model="claude-sonnet-4-20250514")
         assert isinstance(provider, AnthropicProvider)
-        assert provider.model == "claude-3-sonnet-20240229"
+        assert provider.model == "claude-sonnet-4-20250514"
     
     def test_get_gemini_provider(self):
         """Test getting Gemini provider from factory."""
