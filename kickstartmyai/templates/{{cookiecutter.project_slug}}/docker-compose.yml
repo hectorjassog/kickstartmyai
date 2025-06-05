@@ -2,7 +2,8 @@
 version: '3.8'
 
 services:
-  # PostgreSQL Database
+  # Database - conditional based on database_type
+  {%- if cookiecutter.database_type == "postgresql" %}
   postgres:
     image: postgres:15-alpine
     environment:
@@ -18,7 +19,26 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+  {%- elif cookiecutter.database_type == "mysql" %}
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: {{cookiecutter.database_name}}
+      MYSQL_USER: {{cookiecutter.database_user}}
+      MYSQL_PASSWORD: mysql_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+  {%- endif %}
 
+  {%- if cookiecutter.include_redis == "y" %}
   # Redis Cache
   redis:
     image: redis:7-alpine
@@ -31,6 +51,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+  {%- endif %}
 
   # FastAPI Application
   app:
@@ -41,18 +62,33 @@ services:
       - "8000:8000"
     environment:
       - DEBUG=true
+      {%- if cookiecutter.database_type == "postgresql" %}
       - DATABASE_URL=postgresql://{{cookiecutter.database_user}}:postgres_password@postgres:5432/{{cookiecutter.database_name}}
+      {%- elif cookiecutter.database_type == "mysql" %}
+      - DATABASE_URL=mysql://{{cookiecutter.database_user}}:mysql_password@mysql:3306/{{cookiecutter.database_name}}
+      {%- elif cookiecutter.database_type == "sqlite" %}
+      - DATABASE_URL=sqlite:///./{{cookiecutter.database_name}}.db
+      {%- endif %}
+      {%- if cookiecutter.include_redis == "y" %}
       - REDIS_URL=redis://redis:6379/0
+      {%- endif %}
       - SECRET_KEY=dev-secret-key-change-in-production
     volumes:
       - ./app:/app/app
       - ./tests:/app/tests
       - ./alembic:/app/alembic
     depends_on:
+      {%- if cookiecutter.database_type == "postgresql" %}
       postgres:
         condition: service_healthy
+      {%- elif cookiecutter.database_type == "mysql" %}
+      mysql:
+        condition: service_healthy
+      {%- endif %}
+      {%- if cookiecutter.include_redis == "y" %}
       redis:
         condition: service_healthy
+      {%- endif %}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -61,5 +97,11 @@ services:
       start_period: 40s
 
 volumes:
+  {%- if cookiecutter.database_type == "postgresql" %}
   postgres_data:
+  {%- elif cookiecutter.database_type == "mysql" %}
+  mysql_data:
+  {%- endif %}
+  {%- if cookiecutter.include_redis == "y" %}
   redis_data:
+  {%- endif %}
