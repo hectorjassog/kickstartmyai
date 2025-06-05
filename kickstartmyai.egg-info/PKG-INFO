@@ -1,0 +1,45 @@
+Metadata-Version: 2.4
+Name: kickstartmyai
+Version: 0.1.0
+Summary: 🚀 Generate production-ready FastAPI projects with AI capabilities
+Author-email: KickStartMyAI Contributors <contact@kickstartmyai.com>
+Maintainer-email: KickStartMyAI Contributors <contact@kickstartmyai.com>
+License: MIT
+Project-URL: Homepage, https://github.com/kickstartmyai/kickstartmyai
+Project-URL: Documentation, https://kickstartmyai.readthedocs.io/
+Project-URL: Repository, https://github.com/kickstartmyai/kickstartmyai.git
+Project-URL: Issues, https://github.com/kickstartmyai/kickstartmyai/issues
+Project-URL: Changelog, https://github.com/kickstartmyai/kickstartmyai/blob/main/CHANGELOG.md
+Keywords: fastapi,ai,template,generator,boilerplate,cookiecutter,postgresql,terraform,aws,ecs
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Software Development :: Code Generators
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Classifier: Framework :: FastAPI
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+Requires-Dist: cookiecutter>=2.5.0
+Requires-Dist: typer[all]>=0.9.0
+Requires-Dist: rich>=13.0.0
+Requires-Dist: pydantic>=2.0.0
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0.0; extra == "dev"
+Requires-Dist: pytest-cov>=4.0.0; extra == "dev"
+Requires-Dist: black>=23.0.0; extra == "dev"
+Requires-Dist: isort>=5.12.0; extra == "dev"
+Requires-Dist: flake8>=6.0.0; extra == "dev"
+Requires-Dist: mypy>=1.0.0; extra == "dev"
+Requires-Dist: pre-commit>=3.0.0; extra == "dev"
+Provides-Extra: docs
+Requires-Dist: mkdocs>=1.5.0; extra == "docs"
+Requires-Dist: mkdocs-material>=9.0.0; extra == "docs"
+Requires-Dist: mkdocstrings[python]>=0.23.0; extra == "docs"
+
+# kickstartmyai
