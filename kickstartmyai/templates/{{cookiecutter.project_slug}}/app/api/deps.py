@@ -6,8 +6,8 @@ from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from redis.asyncio import Redis
-import jwt
-from jwt import PyJWTError
+from jose import jwt
+from jose.exceptions import JWTError
 
 from app.core.config import settings
 from app.core.exceptions import (
@@ -69,7 +69,7 @@ def decode_token(token: str) -> Dict[str, Any]:
         return payload
     except jwt.ExpiredSignatureError:
         raise TokenExpiredError()
-    except PyJWTError:
+    except JWTError:
         raise InvalidTokenError()
 
 

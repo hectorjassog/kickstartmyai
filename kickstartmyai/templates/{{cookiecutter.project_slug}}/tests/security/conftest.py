@@ -8,6 +8,7 @@ import string
 from typing import Dict, Any, List
 import pytest
 from fastapi.testclient import TestClient
+from jose import jwt
 
 from app.main import app
 from tests.conftest import get_test_db

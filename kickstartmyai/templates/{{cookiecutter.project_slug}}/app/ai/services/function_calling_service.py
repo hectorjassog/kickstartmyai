@@ -157,7 +157,7 @@ class FunctionCallingService:
         
         for param in tool.parameters:
             param_def = {
-                "type": param.type.value,
+                "type": param.type,
                 "description": param.description
             }
             

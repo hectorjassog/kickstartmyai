@@ -17,10 +17,12 @@ from app.ai.tools import (
     create_tool_instance,
     BaseTool
 )
-from app.ai.tools.web_search import WebSearchTool
-from app.ai.tools.code_executor import CodeExecutorTool
-from app.ai.tools.file_manager import FileManagerTool
-from app.ai.tools.database import DatabaseTool
+from app.ai.tools.builtin import (
+    WebSearchTool,
+    CodeExecutorTool,
+    FileManagerTool,
+    DatabaseTool
+)
 from app.ai.services.function_calling_service import function_calling_service
 from app.core.exceptions import ValidationError, AIServiceError
 
@@ -89,29 +91,37 @@ class ToolService:
         
         # Default security policies
         self.default_security_policies = {
-            "web_search": {
+            "information": {
                 "max_requests_per_minute": 10,
                 "allowed_domains": [],
                 "blocked_domains": ["localhost", "127.0.0.1"],
                 "require_https": False
             },
-            "code_execution": {
+            "development": {
                 "max_execution_time": 30,
                 "allowed_languages": ["python", "javascript", "bash"],
                 "sandbox_enabled": True,
                 "network_access": False
             },
-            "file_management": {
+            "file_system": {
                 "allowed_paths": ["/tmp", "/workspace"],
                 "blocked_paths": ["/etc", "/usr", "/bin"],
                 "max_file_size": 10 * 1024 * 1024,  # 10MB
                 "allowed_extensions": [".txt", ".json", ".csv", ".md"]
             },
-            "database": {
+            "data": {
                 "read_only": False,
                 "max_rows": 1000,
                 "timeout": 10,
                 "allowed_operations": ["SELECT", "INSERT", "UPDATE"]
+            },
+            "system": {
+                "allowed_operations": ["list", "info", "exists"],
+                "restricted_paths": ["/etc", "/usr", "/bin", "/root"]
+            },
+            "utility": {
+                "safe_mode": True,
+                "timeout": 10
             }
         }
         

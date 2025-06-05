@@ -5,10 +5,13 @@ Tests for authentication bypasses, token security, session management,
 and authorization vulnerabilities.
 """
 import pytest
-import jwt
-import datetime
-from typing import Dict, Any, List
+from datetime import datetime, timedelta
+from unittest.mock import Mock, patch, AsyncMock
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
+from sqlalchemy.ext.asyncio import AsyncSession
+from jose import jwt
+from typing import Dict, Any, List
 
 from tests.security.conftest import SecurityTestHelper
 from tests.factories.user_factory import UserFactory
@@ -78,8 +81,8 @@ class TestAuthenticationSecurity:
             assert header["alg"] != "none", "None algorithm not allowed"
             
             # Verify expiration is reasonable (not too long)
-            exp_time = datetime.datetime.fromtimestamp(payload["exp"])
-            issued_time = datetime.datetime.fromtimestamp(payload["iat"])
+            exp_time = datetime.fromtimestamp(payload["exp"])
+            issued_time = datetime.fromtimestamp(payload["iat"])
             token_lifetime = exp_time - issued_time
             
             assert token_lifetime.total_seconds() <= 3600, "Token lifetime too long"  # Max 1 hour
@@ -121,19 +124,13 @@ class TestAuthenticationSecurity:
     def test_token_expiration(self, security_client: TestClient, db_session):
         """Test that expired tokens are rejected."""
         # Create a token with immediate expiration
-        import jwt
-        from app.core.config import get_settings
-        
         settings = get_settings()
         
         # Create expired token
         expired_payload = {
-            "sub": "test@example.com",
-            "exp": datetime.datetime.utcnow() - datetime.timedelta(seconds=1),  # Already expired
-            "iat": datetime.datetime.utcnow() - datetime.timedelta(seconds=2),
-            "type": "access"
+            "sub": str(user.id),
+            "exp": datetime.utcnow() - timedelta(minutes=1)
         }
-        
         expired_token = jwt.encode(expired_payload, settings.jwt_secret_key, algorithm="HS256")
         
         # Try to use expired token
