@@ -1,4 +1,4 @@
-# Production Environment Variables
+# Production Environment Variables - Cost Optimized for $50-100/month
 
 variable "aws_region" {
   description = "AWS region"
@@ -12,7 +12,26 @@ variable "vpc_cidr" {
   default     = "10.0.0.0/16"
 }
 
-# Database variables
+# Cost optimization settings
+variable "environment" {
+  description = "Environment name"
+  type        = string
+  default     = "prod"
+}
+
+variable "cost_budget_monthly" {
+  description = "Monthly cost budget in USD"
+  type        = number
+  default     = 100
+}
+
+variable "enable_cost_optimization" {
+  description = "Enable cost optimization features"
+  type        = bool
+  default     = true
+}
+
+# Database variables - Cost optimized
 variable "db_name" {
   description = "Database name"
   type        = string
@@ -32,25 +51,49 @@ variable "db_password" {
 }
 
 variable "db_instance_class" {
-  description = "RDS instance class"
+  description = "RDS instance class - t3.micro for cost optimization"
   type        = string
-  default     = "db.t3.micro"
+  default     = "db.t3.micro"  # ~$13/month
 }
 
 variable "db_allocated_storage" {
   description = "RDS allocated storage in GB"
   type        = number
-  default     = 20
+  default     = 20  # Minimum for gp3, ~$2.3/month
 }
 
-# Redis variables
-variable "redis_node_type" {
-  description = "ElastiCache node type"
+variable "db_storage_type" {
+  description = "RDS storage type"
   type        = string
-  default     = "cache.t3.micro"
+  default     = "gp3"  # More cost effective than gp2
 }
 
-# ECS variables
+variable "db_backup_retention_period" {
+  description = "Database backup retention period in days"
+  type        = number
+  default     = 7  # Reduced from default 30 for cost savings
+}
+
+variable "db_enable_deletion_protection" {
+  description = "Enable deletion protection"
+  type        = bool
+  default     = true
+}
+
+# Redis variables - Cost optimized
+variable "redis_node_type" {
+  description = "ElastiCache node type - t3.micro for cost optimization"
+  type        = string
+  default     = "cache.t3.micro"  # ~$12/month
+}
+
+variable "redis_num_cache_nodes" {
+  description = "Number of cache nodes"
+  type        = number
+  default     = 1  # Single node for cost optimization
+}
+
+# ECS variables - Cost optimized
 variable "app_image" {
   description = "Docker image for the application"
   type        = string
@@ -63,27 +106,77 @@ variable "app_port" {
 }
 
 variable "desired_count" {
-  description = "Desired number of ECS tasks"
+  description = "Desired number of ECS tasks - reduced for cost"
   type        = number
-  default     = 2
+  default     = 1  # Reduced from 2 for cost optimization
 }
 
 variable "cpu" {
-  description = "CPU units for ECS task"
+  description = "CPU units for ECS task - 256 (0.25 vCPU)"
   type        = number
-  default     = 256
+  default     = 256  # ~$6/month for 24/7 operation
 }
 
 variable "memory" {
-  description = "Memory for ECS task"
+  description = "Memory for ECS task in MB"
   type        = number
-  default     = 512
+  default     = 512  # ~$3/month for 24/7 operation
 }
 
-# SSL Certificate
+variable "enable_ecs_auto_scaling" {
+  description = "Enable ECS auto scaling"
+  type        = bool
+  default     = true
+}
+
+variable "ecs_min_capacity" {
+  description = "Minimum ECS task count"
+  type        = number
+  default     = 1
+}
+
+variable "ecs_max_capacity" {
+  description = "Maximum ECS task count"
+  type        = number
+  default     = 3  # Limited scaling for cost control
+}
+
+# SSL Certificate - Free with AWS Certificate Manager
 variable "certificate_arn" {
-  description = "ACM certificate ARN for HTTPS"
+  description = "ACM certificate ARN for HTTPS (optional - will create if not provided)"
   type        = string
+  default     = ""
+}
+
+variable "domain_name" {
+  description = "Domain name for SSL certificate"
+  type        = string
+  default     = ""
+}
+
+variable "create_certificate" {
+  description = "Create ACM certificate automatically"
+  type        = bool
+  default     = false
+}
+
+variable "route53_zone_id" {
+  description = "Route53 hosted zone ID for domain validation"
+  type        = string
+  default     = ""
+}
+
+# CloudWatch Log Retention - Cost optimized
+variable "log_retention_days" {
+  description = "CloudWatch log retention period in days"
+  type        = number
+  default     = 7  # Reduced for cost optimization
+}
+
+variable "enable_detailed_monitoring" {
+  description = "Enable detailed CloudWatch monitoring (additional cost)"
+  type        = bool
+  default     = false  # Disabled for cost optimization
 }
 
 # Secrets

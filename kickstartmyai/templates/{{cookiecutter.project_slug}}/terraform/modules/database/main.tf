@@ -28,7 +28,7 @@ resource "aws_db_subnet_group" "main" {
   })
 }
 
-# RDS Instance
+# RDS Instance - Cost Optimized
 resource "aws_db_instance" "main" {
   identifier = "${var.name_prefix}-db"
 
@@ -36,11 +36,16 @@ resource "aws_db_instance" "main" {
   engine         = "postgres"
   engine_version = var.engine_version
 
-  # Instance
+  # Instance - Cost optimized
   instance_class    = var.instance_class
   allocated_storage = var.allocated_storage
-  storage_type      = "gp2"
+  max_allocated_storage = var.max_allocated_storage  # Enable storage autoscaling
+  storage_type      = var.storage_type  # gp3 is more cost effective
   storage_encrypted = true
+
+  # Performance Insights - Conditionally enabled
+  performance_insights_enabled          = var.enable_performance_insights
+  performance_insights_retention_period = var.enable_performance_insights ? 7 : null  # Free tier
 
   # Database
   db_name  = var.db_name
@@ -52,25 +57,35 @@ resource "aws_db_instance" "main" {
   vpc_security_group_ids = [aws_security_group.rds.id]
   publicly_accessible    = false
 
-  # Backup
-  backup_retention_period = var.backup_retention_period
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
+  # Backup - Cost optimized
+  backup_retention_period   = var.backup_retention_period  # Reduced to 7 days
+  backup_window            = "03:00-04:00"  # Off-peak hours
+  maintenance_window       = "sun:04:00-sun:05:00"  # Off-peak hours
+  copy_tags_to_snapshot    = true
+  delete_automated_backups = true  # Delete automated backups when instance is deleted
 
-  # Monitoring
-  monitoring_interval = 60
-  monitoring_role_arn = aws_iam_role.rds_enhanced_monitoring.arn
+  # Monitoring - Conditionally enabled for cost savings
+  monitoring_interval = var.enable_enhanced_monitoring ? 60 : 0
+  monitoring_role_arn = var.enable_enhanced_monitoring ? aws_iam_role.rds_enhanced_monitoring[0].arn : null
+
+  # Cost optimization features
+  auto_minor_version_upgrade = true  # Automatic minor version upgrades
+  apply_immediately         = false  # Apply changes during maintenance window
 
   # Other
   skip_final_snapshot = var.skip_final_snapshot
   deletion_protection = var.deletion_protection
 
-  tags = var.tags
+  tags = merge(var.tags, {
+    CostOptimized = "true"
+    BackupRetention = var.backup_retention_period
+  })
 }
 
-# IAM Role for Enhanced Monitoring
+# IAM Role for Enhanced Monitoring - Only created if monitoring is enabled
 resource "aws_iam_role" "rds_enhanced_monitoring" {
-  name = "${var.name_prefix}-rds-enhanced-monitoring"
+  count = var.enable_enhanced_monitoring ? 1 : 0
+  name  = "${var.name_prefix}-rds-enhanced-monitoring"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -89,7 +104,8 @@ resource "aws_iam_role" "rds_enhanced_monitoring" {
 }
 
 resource "aws_iam_role_policy_attachment" "rds_enhanced_monitoring" {
-  role       = aws_iam_role.rds_enhanced_monitoring.name
+  count      = var.enable_enhanced_monitoring ? 1 : 0
+  role       = aws_iam_role.rds_enhanced_monitoring[0].name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
 }
 

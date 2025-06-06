@@ -41,6 +41,18 @@ variable "allocated_storage" {
   default     = 20
 }
 
+variable "max_allocated_storage" {
+  description = "Maximum storage for autoscaling"
+  type        = number
+  default     = 100
+}
+
+variable "storage_type" {
+  description = "Storage type (gp3 is more cost effective)"
+  type        = string
+  default     = "gp3"
+}
+
 variable "engine_version" {
   description = "PostgreSQL engine version"
   type        = string
@@ -48,9 +60,21 @@ variable "engine_version" {
 }
 
 variable "backup_retention_period" {
-  description = "Backup retention period in days"
+  description = "Backup retention period in days (reduced for cost optimization)"
   type        = number
   default     = 7
+}
+
+variable "enable_enhanced_monitoring" {
+  description = "Enable enhanced monitoring (additional cost)"
+  type        = bool
+  default     = false
+}
+
+variable "enable_performance_insights" {
+  description = "Enable Performance Insights (free for 7 days retention)"
+  type        = bool
+  default     = true
 }
 
 variable "skip_final_snapshot" {

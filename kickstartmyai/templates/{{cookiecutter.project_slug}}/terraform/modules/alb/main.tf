@@ -111,15 +111,70 @@ resource "aws_lb_listener" "http" {
   }
 }
 
+# ACM Certificate (Free SSL/TLS)
+resource "aws_acm_certificate" "main" {
+  count = var.create_certificate && var.domain_name != "" ? 1 : 0
+
+  domain_name       = var.domain_name
+  validation_method = "DNS"
+
+  subject_alternative_names = [
+    "*.${var.domain_name}"
+  ]
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = var.tags
+}
+
+# Route53 validation record
+resource "aws_route53_record" "cert_validation" {
+  for_each = var.create_certificate && var.domain_name != "" && var.route53_zone_id != "" ? {
+    for dvo in aws_acm_certificate.main[0].domain_validation_options : dvo.domain_name => {
+      name   = dvo.resource_record_name
+      record = dvo.resource_record_value
+      type   = dvo.resource_record_type
+    }
+  } : {}
+
+  allow_overwrite = true
+  name            = each.value.name
+  records         = [each.value.record]
+  ttl             = 60
+  type            = each.value.type
+  zone_id         = var.route53_zone_id
+}
+
+# Certificate validation
+resource "aws_acm_certificate_validation" "main" {
+  count = var.create_certificate && var.domain_name != "" && var.route53_zone_id != "" ? 1 : 0
+
+  certificate_arn         = aws_acm_certificate.main[0].arn
+  validation_record_fqdns = [for record in aws_route53_record.cert_validation : record.fqdn]
+
+  timeouts {
+    create = "5m"
+  }
+}
+
+# Determine certificate ARN to use
+locals {
+  certificate_arn = var.certificate_arn != "" ? var.certificate_arn : (
+    var.create_certificate && var.domain_name != "" ? aws_acm_certificate.main[0].arn : null
+  )
+}
+
 # HTTPS Listener
 resource "aws_lb_listener" "https" {
-  count = var.certificate_arn != null ? 1 : 0
+  count = local.certificate_arn != null ? 1 : 0
 
   load_balancer_arn = aws_lb.main.arn
   port              = "443"
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
-  certificate_arn   = var.certificate_arn
+  certificate_arn   = local.certificate_arn
 
   default_action {
     type             = "forward"
@@ -127,9 +182,9 @@ resource "aws_lb_listener" "https" {
   }
 }
 
-# HTTP Listener (for development without SSL)
+# HTTP Listener (for cases without SSL or redirect to HTTPS)
 resource "aws_lb_listener" "http_direct" {
-  count = var.certificate_arn == null ? 1 : 0
+  count = local.certificate_arn == null ? 1 : 0
 
   load_balancer_arn = aws_lb.main.arn
   port              = "80"

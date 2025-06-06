@@ -104,6 +104,10 @@ class Settings(BaseSettings):
     
     # Monitoring & Logging
     SENTRY_DSN: Optional[str] = None
+    SENTRY_ENVIRONMENT: str = "production"
+    SENTRY_RELEASE: Optional[str] = None
+    SENTRY_SAMPLE_RATE: float = 1.0 if False else 0.1  # Reduced for cost optimization
+    SENTRY_TRACES_SAMPLE_RATE: float = 0.1  # 10% performance monitoring
     LOG_LEVEL: str = "INFO"
     LOG_FORMAT: str = "json"
     LOG_FILE: Optional[str] = None
