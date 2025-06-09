@@ -274,9 +274,6 @@ jobs:
             print('Install failed:', result.stderr)
             sys.exit(1)
         
-        # Install setuptools for build compatibility
-        subprocess.run([pip_exe, 'install', 'setuptools'], capture_output=True, text=True)
-        
         # Test basic import with environment variables
         print('Testing app import...')
         env = os.environ.copy()
@@ -377,11 +374,8 @@ jobs:
             pip_exe = os.path.join('.venv', 'bin', 'pip')
             python_exe = os.path.join('.venv', 'bin', 'python')
         
-        # Install dependencies
+        # Install dependencies (setuptools now included in requirements.txt)
         subprocess.run([pip_exe, 'install', '-r', 'requirements.txt'], check=True)
-        
-        # Install setuptools for build compatibility
-        subprocess.run([pip_exe, 'install', 'setuptools'], capture_output=True, text=True)
         
         # Test basic import with environment
         env = os.environ.copy()
@@ -501,11 +495,8 @@ jobs:
             pip_exe = os.path.join('.venv', 'bin', 'pip')
             python_exe = os.path.join('.venv', 'bin', 'python')
         
-        # Install dependencies per README
+        # Install dependencies per README (setuptools now included)
         subprocess.run([pip_exe, 'install', '-r', 'requirements.txt'], check=True)
-        
-        # Install setuptools for build compatibility
-        subprocess.run([pip_exe, 'install', 'setuptools'], capture_output=True, text=True)
         
         # Test basic functionality with environment
         env = os.environ.copy()

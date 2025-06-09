@@ -11,7 +11,18 @@ import time
 from typing import Dict, Optional, Tuple, Union
 from uuid import uuid4
 
+# Conditional Redis import
+{%- if cookiecutter.include_redis == "y" %}
 import redis.asyncio as redis
+{%- else %}
+# Redis not included, use typing stub
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    import redis.asyncio as redis
+else:
+    redis = None
+{%- endif %}
+
 from fastapi import Request, Response, status
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -25,7 +36,7 @@ logger = logging.getLogger(__name__)
 class RateLimitingMiddleware(BaseHTTPMiddleware):
     """Middleware for rate limiting requests based on various strategies."""
     
-    def __init__(self, app, redis_client: Optional[redis.Redis] = None):
+    def __init__(self, app, redis_client: Optional["redis.Redis"] = None):
         """
         Initialize rate limiting middleware.
         
@@ -34,7 +45,11 @@ class RateLimitingMiddleware(BaseHTTPMiddleware):
             redis_client: Redis client for distributed rate limiting
         """
         super().__init__(app)
+{%- if cookiecutter.include_redis == "y" %}
         self.redis_client = redis_client
+{%- else %}
+        self.redis_client = None  # Redis not included
+{%- endif %}
         self.local_cache: Dict[str, Dict[str, Union[int, float]]] = {}
         self.cleanup_interval = 300  # 5 minutes
         self.last_cleanup = time.time()
@@ -377,6 +392,7 @@ class RateLimitingMiddleware(BaseHTTPMiddleware):
         response.headers["X-Rate-Limit-Reset"] = str(int(reset_time))
 
 
+{%- if cookiecutter.include_redis == "y" %}
 async def create_redis_client() -> Optional[redis.Redis]:
     """
     Create Redis client for rate limiting.
@@ -404,9 +420,20 @@ async def create_redis_client() -> Optional[redis.Redis]:
     except Exception as e:
         logger.warning(f"Failed to create Redis client for rate limiting: {e}")
         return None
+{%- else %}
+async def create_redis_client() -> None:
+    """
+    Redis not included in this configuration.
+    
+    Returns:
+        None (Redis not available)
+    """
+    logger.info("Redis not included, using local rate limiting only")
+    return None
+{%- endif %}
 
 
-def create_rate_limiting_middleware(redis_client: Optional[redis.Redis] = None):
+def create_rate_limiting_middleware(redis_client: Optional["redis.Redis"] = None):
     """
     Create rate limiting middleware with optional Redis client.
     

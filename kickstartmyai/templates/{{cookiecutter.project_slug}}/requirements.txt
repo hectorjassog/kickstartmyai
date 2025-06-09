@@ -5,6 +5,9 @@ pydantic==2.5.0
 pydantic-settings==2.1.0
 email-validator==2.1.1
 
+# Build tools
+setuptools>=65.0.0
+
 # Database
 sqlalchemy==2.0.23
 alembic==1.13.1
