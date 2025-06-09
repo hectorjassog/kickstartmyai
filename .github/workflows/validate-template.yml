@@ -74,26 +74,49 @@ jobs:
         # Create config file for basic test
         cat > cookiecutter_config.json << EOF
         {
-          "project_name": "Test Project",
-          "project_slug": "test_project_basic",
+          "project_name": "Test Project Basic",
           "project_description": "A basic test project",
           "author_name": "Test Author",
           "author_email": "test@example.com",
           "version": "0.1.0",
-          "include_docker": "n",
+          "database_type": "sqlite",
+          "include_openai": "n",
+          "include_anthropic": "n",
+          "include_gemini": "n",
           "include_redis": "n",
-          "database_type": "sqlite"
+          "include_monitoring": "n",
+          "include_load_testing": "n",
+          "use_https": "n"
         }
         EOF
         
         # Generate project
         cookiecutter ./kickstartmyai/templates --config-file cookiecutter_config.json --no-input
         
+        # Determine the actual project slug created (based on project_name)
+        # "Test Project Basic" becomes "test_project_basic"
+        PROJECT_SLUG="test_project_basic"
+        
+        # Check if it was created with the expected name, if not find the actual name
+        if [ ! -d "$PROJECT_SLUG" ]; then
+          echo "Expected directory $PROJECT_SLUG not found, looking for created project..."
+                     # Find the directory that was actually created (exclude known directories)
+           ACTUAL_SLUG=$(ls -1 | grep -v "^\\." | grep -v "kickstartmyai" | grep -v "deprecated" | grep -v "docs" | grep -v "sandbox" | grep -v "test_cookiecutter" | grep -v "\.json$" | grep -v "\.txt$" | grep -v "\.md$" | grep -v "\.toml$" | grep -v "^Makefile$" | head -1)
+          if [ -n "$ACTUAL_SLUG" ] && [ -d "$ACTUAL_SLUG" ]; then
+            PROJECT_SLUG="$ACTUAL_SLUG"
+            echo "Found created project: $PROJECT_SLUG"
+          else
+            echo "No project directory found!"
+            ls -la
+            exit 1
+          fi
+        fi
+        
         # Verify project was created
-        ls -la test_project_basic/
-        test -f test_project_basic/README.md
-        test -f test_project_basic/requirements.txt
-        test -f test_project_basic/app/main.py
+        ls -la $PROJECT_SLUG/
+        test -f $PROJECT_SLUG/README.md
+        test -f $PROJECT_SLUG/requirements.txt
+        test -f $PROJECT_SLUG/app/main.py
     
     - name: Upload validation logs
       if: always()
@@ -175,28 +198,36 @@ jobs:
         cat > cookiecutter_config.json << EOF
         {
           "project_name": "Full Test Project",
-          "project_slug": "test_project_full",
           "project_description": "A full-featured test project",
           "author_name": "Test Author",
           "author_email": "test@example.com",
           "version": "0.1.0",
-          "include_docker": "y",
+          "database_type": "postgresql",
+          "include_openai": "y",
+          "include_anthropic": "y",
+          "include_gemini": "n",
           "include_redis": "y",
-          "database_type": "postgresql"
+          "include_monitoring": "y",
+          "include_load_testing": "n",
+          "use_https": "n"
         }
         EOF
         
         # Generate project
         cookiecutter ./kickstartmyai/templates --config-file cookiecutter_config.json --no-input
         
+        # The project slug will be auto-generated as "full_test_project"
+        PROJECT_SLUG="full_test_project"
+        
         # Verify project structure
-        ls -la test_project_full/
-        test -f test_project_full/docker-compose.yml
-        test -f test_project_full/Dockerfile
+        ls -la $PROJECT_SLUG/
+        test -f $PROJECT_SLUG/docker-compose.yml
+        test -f $PROJECT_SLUG/Dockerfile
     
     - name: Test generated project
       run: |
-        cd test_project_full
+        PROJECT_SLUG="full_test_project"
+        cd $PROJECT_SLUG
         
         # Create virtual environment
         python -m venv .venv
@@ -213,7 +244,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: full-project-py${{ matrix.python-version }}
-        path: test_project_full/
+        path: full_test_project/
         retention-days: 7
 
   test-generated-projects:
@@ -243,26 +274,56 @@ jobs:
     - name: Generate test project (${{ matrix.config }})
       run: |
         # Create config file
-        cat > cookiecutter_config.json << EOF
+        if [ "${{ matrix.config }}" == "minimal" ]; then
+          cat > cookiecutter_config.json << EOF
         {
-          "project_name": "Test Project ${{ matrix.config }}",
-          "project_slug": "test_project_${{ matrix.config }}",
-          "project_description": "A test project for validation",
+          "project_name": "Test Project Minimal",
+          "project_description": "A minimal test project for validation",
           "author_name": "Test Author",
           "author_email": "test@example.com", 
           "version": "0.1.0",
-          "include_docker": "${{ matrix.config == 'full' && 'y' || 'n' }}",
-          "include_redis": "${{ matrix.config == 'full' && 'y' || 'n' }}",
-          "database_type": "${{ matrix.config == 'full' && 'postgresql' || 'sqlite' }}"
+          "database_type": "sqlite",
+          "include_openai": "n",
+          "include_anthropic": "n",
+          "include_gemini": "n",
+          "include_redis": "n",
+          "include_monitoring": "n",
+          "include_load_testing": "n",
+          "use_https": "n"
         }
         EOF
+        else
+          cat > cookiecutter_config.json << EOF
+        {
+          "project_name": "Test Project Full",
+          "project_description": "A full test project for validation",
+          "author_name": "Test Author",
+          "author_email": "test@example.com", 
+          "version": "0.1.0",
+          "database_type": "postgresql",
+          "include_openai": "y",
+          "include_anthropic": "y",
+          "include_gemini": "n",
+          "include_redis": "y",
+          "include_monitoring": "y",
+          "include_load_testing": "n",
+          "use_https": "n"
+        }
+        EOF
+        fi
         
         # Generate project
         cookiecutter ./kickstartmyai/templates --config-file cookiecutter_config.json --no-input
     
     - name: Test generated project structure
       run: |
-        cd "test_project_${{ matrix.config }}"
+        if [ "${{ matrix.config }}" == "minimal" ]; then
+          PROJECT_SLUG="test_project_minimal"
+        else
+          PROJECT_SLUG="test_project_full"
+        fi
+        
+        cd "$PROJECT_SLUG"
         
         # Verify basic structure
         test -f README.md
@@ -343,14 +404,18 @@ jobs:
         cat > cookiecutter_config.json << EOF
         {
           "project_name": "Documentation Test Project",
-          "project_slug": "docs_test_project",
           "project_description": "Testing documentation accuracy",
           "author_name": "Test Author",
           "author_email": "test@example.com",
           "version": "0.1.0",
-          "include_docker": "y",
+          "database_type": "postgresql",
+          "include_openai": "y",
+          "include_anthropic": "n",
+          "include_gemini": "n",
           "include_redis": "y",
-          "database_type": "postgresql"
+          "include_monitoring": "y",
+          "include_load_testing": "n",
+          "use_https": "n"
         }
         EOF
         
@@ -358,7 +423,8 @@ jobs:
     
     - name: Validate README instructions
       run: |
-        cd docs_test_project
+        PROJECT_SLUG="documentation_test_project"
+        cd $PROJECT_SLUG
         
         # Verify project was created correctly
         test -f README.md
@@ -377,7 +443,8 @@ jobs:
     
     - name: Check documentation completeness
       run: |
-        cd docs_test_project
+        PROJECT_SLUG="documentation_test_project"
+        cd $PROJECT_SLUG
         
         # Verify key files exist
         test -f README.md
