@@ -69,13 +69,16 @@ resource "aws_ecs_task_definition" "app" {
   tags = var.tags
 }
 
-# ECS Service
+# ECS Service with Cost-Effective Auto Scaling
 resource "aws_ecs_service" "app" {
   name            = "${var.name_prefix}-service"
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.app.arn
   desired_count   = var.desired_count
   launch_type     = "FARGATE"
+
+  # Enable auto scaling
+  enable_execute_command = false  # Disabled for cost optimization
 
   network_configuration {
     security_groups  = var.security_group_ids
@@ -89,9 +92,113 @@ resource "aws_ecs_service" "app" {
     container_port   = var.app_port
   }
 
+  # Deployment configuration for cost optimization
+  deployment_configuration {
+    maximum_percent         = 150  # Reduced from default 200
+    minimum_healthy_percent = 50   # Allow some downtime for cost savings
+    
+    deployment_circuit_breaker {
+      enable   = true
+      rollback = true
+    }
+  }
+
+  # Cost optimization: Don't maintain service during low usage
+  lifecycle {
+    ignore_changes = [desired_count]  # Allow auto scaling to manage
+  }
+
   depends_on = [var.target_group_arn]
 
-  tags = var.tags
+  tags = merge(var.tags, {
+    AutoScaling = "enabled"
+    CostOptimized = "true"
+  })
+}
+
+# Auto Scaling Target
+resource "aws_appautoscaling_target" "ecs_target" {
+  count              = var.enable_auto_scaling ? 1 : 0
+  max_capacity       = var.max_capacity
+  min_capacity       = var.min_capacity
+  resource_id        = "service/${aws_ecs_cluster.main.name}/${aws_ecs_service.app.name}"
+  scalable_dimension = "ecs:service:DesiredCount"
+  service_namespace  = "ecs"
+
+  tags = merge(var.tags, {
+    Name = "${var.name_prefix}-autoscaling-target"
+  })
+}
+
+# CPU-based Auto Scaling Policy (Scale Up)
+resource "aws_appautoscaling_policy" "scale_up_cpu" {
+  count              = var.enable_auto_scaling ? 1 : 0
+  name               = "${var.name_prefix}-scale-up-cpu"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.ecs_target[0].resource_id
+  scalable_dimension = aws_appautoscaling_target.ecs_target[0].scalable_dimension
+  service_namespace  = aws_appautoscaling_target.ecs_target[0].service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageCPUUtilization"
+    }
+    target_value       = 70.0  # Scale up when CPU > 70%
+    scale_out_cooldown = 300   # 5 minutes cooldown
+    scale_in_cooldown  = 300   # 5 minutes cooldown
+  }
+}
+
+# Memory-based Auto Scaling Policy (Scale Up)
+resource "aws_appautoscaling_policy" "scale_up_memory" {
+  count              = var.enable_auto_scaling ? 1 : 0
+  name               = "${var.name_prefix}-scale-up-memory"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.ecs_target[0].resource_id
+  scalable_dimension = aws_appautoscaling_target.ecs_target[0].scalable_dimension
+  service_namespace  = aws_appautoscaling_target.ecs_target[0].service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageMemoryUtilization"
+    }
+    target_value       = 80.0  # Scale up when Memory > 80%
+    scale_out_cooldown = 300   # 5 minutes cooldown
+    scale_in_cooldown  = 600   # 10 minutes cooldown (longer for cost optimization)
+  }
+}
+
+# Cost Optimization: Scheduled Scaling (Scale down during low usage hours)
+resource "aws_appautoscaling_scheduled_action" "scale_down_night" {
+  count              = var.enable_scheduled_scaling ? 1 : 0
+  name               = "${var.name_prefix}-scale-down-night"
+  service_namespace  = aws_appautoscaling_target.ecs_target[0].service_namespace
+  resource_id        = aws_appautoscaling_target.ecs_target[0].resource_id
+  scalable_dimension = aws_appautoscaling_target.ecs_target[0].scalable_dimension
+
+  # Scale down to minimum during night hours (UTC)
+  schedule = "cron(0 2 * * ? *)"  # 2 AM UTC daily
+
+  scalable_target_action {
+    min_capacity = 1
+    max_capacity = var.min_capacity
+  }
+}
+
+resource "aws_appautoscaling_scheduled_action" "scale_up_morning" {
+  count              = var.enable_scheduled_scaling ? 1 : 0
+  name               = "${var.name_prefix}-scale-up-morning"
+  service_namespace  = aws_appautoscaling_target.ecs_target[0].service_namespace
+  resource_id        = aws_appautoscaling_target.ecs_target[0].resource_id
+  scalable_dimension = aws_appautoscaling_target.ecs_target[0].scalable_dimension
+
+  # Scale up during business hours (UTC)
+  schedule = "cron(0 8 * * ? *)"  # 8 AM UTC daily
+
+  scalable_target_action {
+    min_capacity = var.min_capacity
+    max_capacity = var.max_capacity
+  }
 }
 
 # CloudWatch Log Group

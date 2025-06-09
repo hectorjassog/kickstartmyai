@@ -28,6 +28,8 @@ class AgentType(str, Enum):
 
 class Agent(Base):
     """Agent model for storing AI agent configurations and metadata."""
+    
+    __tablename__ = "agents"
 
     # Basic information (id, created_at, updated_at inherited from Base)
     name = Column(String, nullable=False, index=True)

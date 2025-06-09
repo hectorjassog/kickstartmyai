@@ -33,6 +33,8 @@ class ExecutionType(str, Enum):
 class Execution(Base):
     """Model for tracking agent execution instances."""
     
+    __tablename__ = "executions"
+    
     # Execution identification
     execution_id = Column(String(255), unique=True, index=True, nullable=False)
     name = Column(String(255), nullable=False)

@@ -17,6 +17,8 @@ class MessageRole(str, enum.Enum):
 
 class Message(Base):
     """Message model."""
+    
+    __tablename__ = "messages"
 
     content = Column(Text, nullable=False)
     role = Column(Enum(MessageRole), nullable=False)

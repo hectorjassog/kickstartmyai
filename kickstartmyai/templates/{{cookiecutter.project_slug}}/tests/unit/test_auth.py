@@ -6,11 +6,12 @@ to ensure secure user authentication and authorization.
 """
 
 import pytest
-import jwt
 from datetime import datetime, timedelta, timezone
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 from fastapi import HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials
+from sqlalchemy.ext.asyncio import AsyncSession
+from jose import jwt
 
 from app.core.security.jwt_handler import (
     create_access_token,

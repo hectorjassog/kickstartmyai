@@ -224,7 +224,7 @@ class BaseTool(ABC):
         
         for param in self.parameters:
             prop = {
-                "type": param.type.value,
+                "type": param.type,
                 "description": param.description
             }
             

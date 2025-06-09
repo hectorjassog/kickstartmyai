@@ -11,7 +11,8 @@ from .builtin import (
     CalculatorTool,
     FileSystemTool,
     DatabaseTool,
-    TimeTool
+    CodeExecutorTool,
+    FileManagerTool
 )
 
 logger = logging.getLogger(__name__)
@@ -27,7 +28,8 @@ def register_builtin_tools():
         CalculatorTool(),
         FileSystemTool(),
         DatabaseTool(),
-        TimeTool()
+        CodeExecutorTool(),
+        FileManagerTool()
     ]
     
     for tool in tools:

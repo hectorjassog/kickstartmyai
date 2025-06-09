@@ -1,24 +1,43 @@
-# CloudWatch Log Groups
+# CloudWatch Log Groups - Cost Optimized
 resource "aws_cloudwatch_log_group" "app_logs" {
-  name              = "/aws/ecs/${var.environment}-${var.project_name}"
-  retention_in_days = var.log_retention_days
+  name              = "/ecs/${var.name_prefix}"
+  retention_in_days = var.log_retention_days  # Reduced retention for cost savings
+  kms_key_id        = var.enable_log_encryption ? aws_kms_key.cloudwatch[0].arn : null
 
-  tags = {
-    Name        = "${var.environment}-${var.project_name}-app-logs"
-    Environment = var.environment
-    Project     = var.project_name
-  }
+  tags = merge(var.tags, {
+    Name = "${var.name_prefix}-app-logs"
+    CostOptimized = "true"
+    RetentionDays = var.log_retention_days
+  })
 }
 
-resource "aws_cloudwatch_log_group" "nginx_logs" {
-  name              = "/aws/ecs/${var.environment}-${var.project_name}/nginx"
-  retention_in_days = var.log_retention_days
+# Cost Monitoring CloudWatch Log Group
+resource "aws_cloudwatch_log_group" "cost_logs" {
+  count             = var.enable_cost_monitoring ? 1 : 0
+  name              = "/aws/cost/${var.name_prefix}"
+  retention_in_days = 30  # Longer retention for cost analysis
 
-  tags = {
-    Name        = "${var.environment}-${var.project_name}-nginx-logs"
-    Environment = var.environment
-    Project     = var.project_name
-  }
+  tags = merge(var.tags, {
+    Name = "${var.name_prefix}-cost-logs"
+    Purpose = "cost-monitoring"
+  })
+}
+
+# KMS Key for log encryption (optional)
+resource "aws_kms_key" "cloudwatch" {
+  count                   = var.enable_log_encryption ? 1 : 0
+  description             = "KMS key for CloudWatch logs encryption"
+  deletion_window_in_days = 7  # Reduced for cost optimization
+
+  tags = merge(var.tags, {
+    Name = "${var.name_prefix}-cloudwatch-kms"
+  })
+}
+
+resource "aws_kms_alias" "cloudwatch" {
+  count         = var.enable_log_encryption ? 1 : 0
+  name          = "alias/${var.name_prefix}-cloudwatch"
+  target_key_id = aws_kms_key.cloudwatch[0].key_id
 }
 
 # SNS Topic for Alarms
@@ -269,11 +288,11 @@ resource "aws_cloudwatch_log_metric_filter" "error_count" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "application_error_rate_high" {
-  alarm_name          = "${var.environment}-${var.project_name}-error-rate-high"
+  alarm_name          = "${var.name_prefix}-error-rate-high"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "ErrorCount"
-  namespace           = "Application/${var.project_name}"
+  namespace           = "Application/${var.name_prefix}"
   period              = "300"
   statistic           = "Sum"
   threshold           = "10"
@@ -281,9 +300,91 @@ resource "aws_cloudwatch_metric_alarm" "application_error_rate_high" {
   alarm_actions       = [aws_sns_topic.alerts.arn]
   treat_missing_data  = "notBreaching"
 
-  tags = {
-    Name        = "${var.environment}-${var.project_name}-error-rate-alarm"
-    Environment = var.environment
-    Project     = var.project_name
+  tags = merge(var.tags, {
+    Name = "${var.name_prefix}-error-rate-alarm"
+  })
+}
+
+# Cost Budget - Critical for staying under $100/month
+resource "aws_budgets_budget" "monthly_cost" {
+  count        = var.enable_cost_monitoring ? 1 : 0
+  name         = "${var.name_prefix}-monthly-budget"
+  budget_type  = "COST"
+  limit_amount = var.monthly_budget_limit
+  limit_unit   = "USD"
+  time_unit    = "MONTHLY"
+  time_period_start = "2024-01-01_00:00"
+
+  cost_filters = {
+    TagKey = ["Project"]
+    TagValue = [var.name_prefix]
   }
+
+  notification {
+    comparison_operator        = "GREATER_THAN"
+    threshold                 = 80  # Alert at 80% of budget
+    threshold_type            = "PERCENTAGE"
+    notification_type         = "ACTUAL"
+    subscriber_email_addresses = var.alert_email_addresses
+  }
+
+  notification {
+    comparison_operator        = "GREATER_THAN"
+    threshold                 = 100  # Alert when budget exceeded
+    threshold_type            = "PERCENTAGE"
+    notification_type          = "FORECASTED"
+    subscriber_email_addresses = var.alert_email_addresses
+  }
+
+  tags = merge(var.tags, {
+    Name = "${var.name_prefix}-budget"
+    Purpose = "cost-control"
+  })
+}
+
+# Cost Anomaly Detection
+resource "aws_ce_anomaly_detector" "cost_anomaly" {
+  count         = var.enable_cost_monitoring ? 1 : 0
+  name          = "${var.name_prefix}-cost-anomaly"
+  monitor_type  = "DIMENSIONAL"
+
+  specification = jsonencode({
+    Dimension = "SERVICE"
+    MatchOptions = ["EQUALS"]
+    Values = ["Amazon Elastic Container Service", "Amazon Relational Database Service", "Amazon ElastiCache"]
+  })
+
+  tags = merge(var.tags, {
+    Name = "${var.name_prefix}-cost-anomaly"
+  })
+}
+
+# Cost Anomaly Subscription
+resource "aws_ce_anomaly_subscription" "cost_anomaly_alerts" {
+  count     = var.enable_cost_monitoring && length(var.alert_email_addresses) > 0 ? 1 : 0
+  name      = "${var.name_prefix}-cost-anomaly-alerts"
+  frequency = "DAILY"
+  
+  monitor_arn_list = [
+    aws_ce_anomaly_detector.cost_anomaly[0].arn
+  ]
+  
+  subscriber {
+    type    = "EMAIL"
+    address = var.alert_email_addresses[0]
+  }
+
+  threshold_expression {
+    and {
+      dimension {
+        key           = "ANOMALY_TOTAL_IMPACT_ABSOLUTE"
+        values        = ["10"]  # Alert for anomalies over $10
+        match_options = ["GREATER_THAN_OR_EQUAL"]
+      }
+    }
+  }
+
+  tags = merge(var.tags, {
+    Name = "${var.name_prefix}-cost-anomaly-subscription"
+  })
 }

@@ -16,7 +16,25 @@ variable "subnet_ids" {
 variable "certificate_arn" {
   description = "SSL certificate ARN"
   type        = string
-  default     = null
+  default     = ""
+}
+
+variable "domain_name" {
+  description = "Domain name for SSL certificate"
+  type        = string
+  default     = ""
+}
+
+variable "create_certificate" {
+  description = "Create ACM certificate automatically"
+  type        = bool
+  default     = false
+}
+
+variable "route53_zone_id" {
+  description = "Route53 hosted zone ID for domain validation"
+  type        = string
+  default     = ""
 }
 
 variable "tags" {

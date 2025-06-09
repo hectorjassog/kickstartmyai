@@ -9,6 +9,8 @@ from app.db.base import Base
 
 class Conversation(Base):
     """Conversation model."""
+    
+    __tablename__ = "conversations"
 
     title = Column(String, nullable=False)
     description = Column(Text, nullable=True)

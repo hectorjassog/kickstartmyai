@@ -8,6 +8,8 @@ from app.db.base import Base
 
 class User(Base):
     """User model with authentication and profile information."""
+    
+    __tablename__ = "users"
 
     # Basic user information (id, created_at, updated_at inherited from Base)
     email = Column(String, unique=True, index=True, nullable=False)

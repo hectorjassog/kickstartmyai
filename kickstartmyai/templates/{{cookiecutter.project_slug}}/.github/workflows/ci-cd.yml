@@ -1,0 +1,310 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  release:
+    types: [ published ]
+
+env:
+  AWS_REGION: {{cookiecutter.aws_region}}
+  ECR_REPOSITORY: {{cookiecutter.project_slug}}
+  ECS_SERVICE: {{cookiecutter.project_slug}}-prod-service
+  ECS_CLUSTER: {{cookiecutter.project_slug}}-prod-cluster
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["{{cookiecutter.python_version}}"]
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python {% raw %}${{ matrix.python-version }}{% endraw %}
+      uses: actions/setup-python@v4
+      with:
+        python-version: {% raw %}${{ matrix.python-version }}{% endraw %}
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -r requirements-dev.txt
+
+    - name: Lint with flake8
+      run: |
+        flake8 app/ tests/ --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 app/ tests/ --count --exit-zero --max-complexity=10 --max-line-length=88 --statistics
+
+    - name: Type check with mypy
+      run: mypy app/
+
+    - name: Format check with black
+      run: black --check app/ tests/
+
+    - name: Import sorting check with isort
+      run: isort --check-only app/ tests/
+
+    - name: Security check with bandit
+      run: bandit -r app/ -f json -o bandit-report.json || true
+
+    - name: Run tests with pytest
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+        REDIS_URL: redis://localhost:6379/0
+        SECRET_KEY: test-secret-key-for-ci
+        ENVIRONMENT: testing
+      run: |
+        pytest tests/ \
+          --cov=app \
+          --cov-report=xml \
+          --cov-report=html \
+          --cov-fail-under=80 \
+          -v
+
+    - name: Upload coverage reports
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: test-results-{% raw %}${{ matrix.python-version }}{% endraw %}
+        path: |
+          htmlcov/
+          bandit-report.json
+          coverage.xml
+
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  build:
+    needs: [test, security-scan]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    outputs:
+      image: {% raw %}${{ steps.build-image.outputs.image }}{% endraw %}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: {% raw %}${{ secrets.AWS_ACCESS_KEY_ID }}{% endraw %}
+        aws-secret-access-key: {% raw %}${{ secrets.AWS_SECRET_ACCESS_KEY }}{% endraw %}
+        aws-region: {% raw %}${{ env.AWS_REGION }}{% endraw %}
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Build, tag, and push image to Amazon ECR
+      id: build-image
+      env:
+        ECR_REGISTRY: {% raw %}${{ steps.login-ecr.outputs.registry }}{% endraw %}
+        IMAGE_TAG: {% raw %}${{ github.sha }}{% endraw %}
+      run: |
+        # Build the Docker image
+        docker build -f docker/Dockerfile.prod -t {% raw %}$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG{% endraw %} .
+        docker tag {% raw %}$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG{% endraw %} {% raw %}$ECR_REGISTRY/$ECR_REPOSITORY{% endraw %}:latest
+        
+        # Push the images
+        docker push {% raw %}$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG{% endraw %}
+        docker push {% raw %}$ECR_REGISTRY/$ECR_REPOSITORY{% endraw %}:latest
+        
+        echo "image={% raw %}$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG{% endraw %}" >> {% raw %}$GITHUB_OUTPUT{% endraw %}
+
+    - name: Scan image with Trivy
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: {% raw %}${{ steps.build-image.outputs.image }}{% endraw %}
+        format: 'sarif'
+        output: 'trivy-image-results.sarif'
+
+    - name: Upload image scan results
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-image-results.sarif'
+
+  deploy-staging:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment: staging
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: {% raw %}${{ secrets.AWS_ACCESS_KEY_ID }}{% endraw %}
+        aws-secret-access-key: {% raw %}${{ secrets.AWS_SECRET_ACCESS_KEY }}{% endraw %}
+        aws-region: {% raw %}${{ env.AWS_REGION }}{% endraw %}
+
+    - name: Deploy to staging
+      run: |
+        # Update ECS service with new image
+        aws ecs update-service \
+          --cluster {{cookiecutter.project_slug}}-staging-cluster \
+          --service {{cookiecutter.project_slug}}-staging-service \
+          --force-new-deployment
+
+    - name: Wait for deployment
+      run: |
+        aws ecs wait services-stable \
+          --cluster {{cookiecutter.project_slug}}-staging-cluster \
+          --services {{cookiecutter.project_slug}}-staging-service
+
+    - name: Run smoke tests
+      run: |
+        # Basic health check
+        STAGING_URL="{% raw %}${{ secrets.STAGING_URL }}{% endraw %}"
+        curl -f "{% raw %}${STAGING_URL}{% endraw %}/health" || exit 1
+        
+        # API endpoint test
+        curl -f "{% raw %}${STAGING_URL}{% endraw %}/api/v1/health" || exit 1
+
+  deploy-production:
+    needs: [build, deploy-staging]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release' && github.event.action == 'published'
+    environment: production
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: {% raw %}${{ secrets.AWS_ACCESS_KEY_ID }}{% endraw %}
+        aws-secret-access-key: {% raw %}${{ secrets.AWS_SECRET_ACCESS_KEY }}{% endraw %}
+        aws-region: {% raw %}${{ env.AWS_REGION }}{% endraw %}
+
+    - name: Deploy to production
+      run: |
+        # Update ECS service with new image
+        aws ecs update-service \
+          --cluster {% raw %}${{ env.ECS_CLUSTER }}{% endraw %} \
+          --service {% raw %}${{ env.ECS_SERVICE }}{% endraw %} \
+          --force-new-deployment
+
+    - name: Wait for deployment
+      run: |
+        aws ecs wait services-stable \
+          --cluster {% raw %}${{ env.ECS_CLUSTER }}{% endraw %} \
+          --services {% raw %}${{ env.ECS_SERVICE }}{% endraw %}
+
+    - name: Run production smoke tests
+      run: |
+        # Basic health check
+        PROD_URL="{% raw %}${{ secrets.PRODUCTION_URL }}{% endraw %}"
+        curl -f "{% raw %}${PROD_URL}{% endraw %}/health" || exit 1
+        
+        # API endpoint test
+        curl -f "{% raw %}${PROD_URL}{% endraw %}/api/v1/health" || exit 1
+
+    - name: Notify Sentry of deployment
+      run: |
+        curl -X POST \
+          -H "Authorization: Bearer {% raw %}${{ secrets.SENTRY_AUTH_TOKEN }}{% endraw %}" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "version": "{% raw %}${{ github.event.release.tag_name }}{% endraw %}",
+            "refs": [{
+              "repository": "{% raw %}${{ github.repository }}{% endraw %}",
+              "commit": "{% raw %}${{ github.sha }}{% endraw %}"
+            }],
+            "projects": ["{{cookiecutter.project_slug}}"]
+          }' \
+          "https://sentry.io/api/0/organizations/{% raw %}${{ secrets.SENTRY_ORG }}{% endraw %}/releases/"
+
+  cost-check:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: {% raw %}${{ secrets.AWS_ACCESS_KEY_ID }}{% endraw %}
+        aws-secret-access-key: {% raw %}${{ secrets.AWS_SECRET_ACCESS_KEY }}{% endraw %}
+        aws-region: {% raw %}${{ env.AWS_REGION }}{% endraw %}
+
+    - name: Check AWS costs
+      run: |
+        # Get current month costs
+        CURRENT_COST=$(aws ce get-cost-and-usage \
+          --time-period Start=$(date -d "$(date +%Y-%m-01)" +%Y-%m-%d),End=$(date +%Y-%m-%d) \
+          --granularity MONTHLY \
+          --metrics BlendedCost \
+          --group-by Type=DIMENSION,Key=SERVICE \
+          --query 'ResultsByTime[0].Total.BlendedCost.Amount' \
+          --output text)
+        
+        echo "Current month cost: {% raw %}$${CURRENT_COST}{% endraw %}"
+        
+        # Alert if cost exceeds $80 (80% of budget)
+        if (( $(echo "{% raw %}$CURRENT_COST{% endraw %} > 80" | bc -l) )); then
+          echo "::warning::AWS costs ({% raw %}$${CURRENT_COST}{% endraw %}) approaching budget limit!"
+        fi
