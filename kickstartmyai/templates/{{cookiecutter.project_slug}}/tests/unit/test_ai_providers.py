@@ -1,21 +1,29 @@
 """
 Unit tests for AI providers.
 
-Tests all three AI providers (OpenAI, Anthropic, Gemini) to ensure
-they work correctly with proper error handling and response formatting.
+Tests selected AI providers based on cookiecutter configuration.
 """
 
 import pytest
 import httpx
 from unittest.mock import AsyncMock, patch
 
+# Conditional imports based on cookiecutter configuration
+{% if cookiecutter.include_openai == "y" %}
 from app.ai.providers.openai import OpenAIProvider
+{% endif %}
+{% if cookiecutter.include_anthropic == "y" %}
 from app.ai.providers.anthropic import AnthropicProvider
+{% endif %}
+{% if cookiecutter.include_gemini == "y" %}
 from app.ai.providers.gemini import GeminiProvider
+{% endif %}
+
 from app.ai.providers.factory import get_ai_provider
 from app.ai.providers.base import ChatMessage
 
 
+{% if cookiecutter.include_openai == "y" %}
 class TestOpenAIProvider:
     """Test OpenAI provider functionality."""
     
@@ -120,8 +128,10 @@ class TestOpenAIProvider:
             
             with pytest.raises(Exception):
                 await openai_provider.chat_completion(messages)
+{% endif %}
 
 
+{% if cookiecutter.include_anthropic == "y" %}
 class TestAnthropicProvider:
     """Test Anthropic provider functionality."""
     
@@ -206,8 +216,10 @@ class TestAnthropicProvider:
         assert anthropic_messages[0]["role"] == "user"
         assert anthropic_messages[1]["role"] == "assistant"
         assert anthropic_messages[2]["role"] == "user"
+{% endif %}
 
 
+{% if cookiecutter.include_gemini == "y" %}
 class TestGeminiProvider:
     """Test Google Gemini provider functionality."""
     
@@ -286,34 +298,42 @@ class TestGeminiProvider:
         assert gemini_messages[0]["role"] == "user"
         assert gemini_messages[1]["role"] == "model"  # assistant -> model
         assert gemini_messages[2]["role"] == "user"
+{% endif %}
 
 
 class TestProviderFactory:
     """Test AI provider factory functionality."""
     
+{% if cookiecutter.include_openai == "y" %}
     def test_get_openai_provider(self):
         """Test getting OpenAI provider from factory."""
         provider = get_ai_provider("openai", model="gpt-4")
         assert isinstance(provider, OpenAIProvider)
         assert provider.model == "gpt-4"
+{% endif %}
     
+{% if cookiecutter.include_anthropic == "y" %}
     def test_get_anthropic_provider(self):
         """Test getting Anthropic provider from factory."""
         provider = get_ai_provider("anthropic", model="claude-sonnet-4-20250514")
         assert isinstance(provider, AnthropicProvider)
         assert provider.model == "claude-sonnet-4-20250514"
+{% endif %}
     
+{% if cookiecutter.include_gemini == "y" %}
     def test_get_gemini_provider(self):
         """Test getting Gemini provider from factory."""
         provider = get_ai_provider("gemini", model="gemini-pro")
         assert isinstance(provider, GeminiProvider)
         assert provider.model == "gemini-pro"
+{% endif %}
     
     def test_invalid_provider(self):
         """Test error handling for invalid provider."""
-        with pytest.raises(ValueError, match="Unknown AI provider"):
+        with pytest.raises(ValueError, match="Unknown provider"):
             get_ai_provider("invalid_provider")
     
+{% if cookiecutter.include_openai == "y" %}
     def test_provider_caching(self):
         """Test that providers are cached properly."""
         provider1 = get_ai_provider("openai", model="gpt-4")
@@ -330,6 +350,7 @@ class TestProviderFactory:
         # Should be different instances
         assert provider1 is not provider2
         assert provider1.model != provider2.model
+{% endif %}
 
 
 class TestChatMessage:

@@ -11,9 +11,16 @@ from unittest.mock import AsyncMock, patch, MagicMock
 from httpx import AsyncClient
 from fastapi import status
 
+# Conditional imports based on cookiecutter configuration
+{% if cookiecutter.include_openai == "y" %}
 from app.ai.providers.openai import OpenAIProvider
+{% endif %}
+{% if cookiecutter.include_anthropic == "y" %}
 from app.ai.providers.anthropic import AnthropicProvider
+{% endif %}
+{% if cookiecutter.include_gemini == "y" %}
 from app.ai.providers.gemini import GeminiProvider
+{% endif %}
 from app.ai.tools.manager import ToolManager
 from app.ai.tools.web_search import WebSearchTool
 from app.ai.tools.calculator import CalculatorTool
@@ -515,6 +522,7 @@ class TestCompleteAIPipeline:
 class TestAIProviderSpecificWorkflows:
     """Test provider-specific AI workflow features."""
 
+{% if cookiecutter.include_openai == "y" %}
     async def test_openai_function_calling_workflow(
         self, 
         async_client: AsyncClient,
@@ -613,7 +621,9 @@ class TestAIProviderSpecificWorkflows:
         tool_names = [tool["function"]["name"] for tool in tools]
         assert "calculator" in tool_names
         assert "web_search" in tool_names
+{% endif %}
 
+{% if cookiecutter.include_anthropic == "y" %}
     async def test_anthropic_tool_use_workflow(
         self, 
         async_client: AsyncClient,
@@ -700,3 +710,4 @@ class TestAIProviderSpecificWorkflows:
         # Verify Anthropic was called with tools parameter
         first_call = mock_anthropic_client.messages.create.call_args_list[0]
         assert "tools" in first_call[1]
+{% endif %}

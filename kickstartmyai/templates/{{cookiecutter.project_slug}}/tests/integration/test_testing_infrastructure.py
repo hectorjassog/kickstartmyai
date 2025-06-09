@@ -233,32 +233,47 @@ class TestAIProviderIntegration:
     def test_ai_provider_imports(self):
         """Test AI provider imports work correctly."""
         with patch.dict(os.environ, TEST_ENV):
-            from app.ai.providers.openai import OpenAIProvider
-            from app.ai.providers.anthropic import AnthropicProvider
-            from app.ai.providers.gemini import GeminiProvider
             from app.ai.providers.factory import get_ai_provider
             
-            # Should import without errors
+{% if cookiecutter.include_openai == "y" %}
+            from app.ai.providers.openai import OpenAIProvider
             assert OpenAIProvider is not None
+{% endif %}
+{% if cookiecutter.include_anthropic == "y" %}
+            from app.ai.providers.anthropic import AnthropicProvider
             assert AnthropicProvider is not None
+{% endif %}
+{% if cookiecutter.include_gemini == "y" %}
+            from app.ai.providers.gemini import GeminiProvider
             assert GeminiProvider is not None
+{% endif %}
+            
+            # Factory should always be available
             assert get_ai_provider is not None
 
     def test_ai_provider_instantiation(self):
         """Test AI provider instantiation works."""
         with patch.dict(os.environ, TEST_ENV):
+{% if cookiecutter.include_openai == "y" %}
             from app.ai.providers.openai import OpenAIProvider
-            from app.ai.providers.anthropic import AnthropicProvider
-            from app.ai.providers.gemini import GeminiProvider
-            
-            # Should create providers without errors
             openai_provider = OpenAIProvider(api_key="test-key")
-            anthropic_provider = AnthropicProvider(api_key="test-key")
-            gemini_provider = GeminiProvider(api_key="test-key")
-            
             assert openai_provider is not None
+{% endif %}
+{% if cookiecutter.include_anthropic == "y" %}
+            from app.ai.providers.anthropic import AnthropicProvider
+            anthropic_provider = AnthropicProvider(api_key="test-key")
             assert anthropic_provider is not None
+{% endif %}
+{% if cookiecutter.include_gemini == "y" %}
+            from app.ai.providers.gemini import GeminiProvider
+            gemini_provider = GeminiProvider(api_key="test-key")
             assert gemini_provider is not None
+{% endif %}
+            
+            # At least one provider should be available
+            from app.ai.providers.factory import AIProviderFactory
+            available_providers = AIProviderFactory.get_available_providers()
+            assert len(available_providers) > 0, "At least one AI provider should be configured"
 
 
 class TestToolsIntegration:
