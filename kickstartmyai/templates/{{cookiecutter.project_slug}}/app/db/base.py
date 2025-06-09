@@ -54,51 +54,60 @@ class Base:
 # Async engine for modern async operations
 database_url = settings.get_database_url()
 
-# Handle SQLite URLs for async operations
-if database_url.startswith("sqlite"):
-    # For SQLite, use aiosqlite for async support
-    async_database_url = database_url.replace("sqlite://", "sqlite+aiosqlite://")
-    sync_database_url = database_url
-    
-    # SQLite doesn't support connection pooling
-    async_engine = create_async_engine(
-        async_database_url,
-        echo=settings.DEBUG,
-        pool_pre_ping=True,
-    )
-    
-    # Sync engine for migration and initial setup
-    sync_engine = create_engine(
-        sync_database_url,
-        echo=settings.DEBUG,
-        pool_pre_ping=True,
-    )
+# Handle database URLs for async operations
+{%- if cookiecutter.database_type == "postgresql" %}
+# For PostgreSQL, use asyncpg for async and psycopg2 for sync
+if "postgresql+asyncpg://" not in database_url:
+    async_database_url = database_url.replace("postgresql://", "postgresql+asyncpg://")
 else:
-    # For PostgreSQL, use asyncpg for async and psycopg2 for sync
-    if "postgresql+asyncpg://" not in database_url:
-        async_database_url = database_url.replace("postgresql://", "postgresql+asyncpg://")
-    else:
-        async_database_url = database_url
-    sync_database_url = database_url.replace("postgresql+asyncpg://", "postgresql://")
-    
-    async_engine = create_async_engine(
-        async_database_url,
-        echo=settings.DEBUG,
-        pool_size=settings.DATABASE_POOL_SIZE,
-        max_overflow=settings.DATABASE_MAX_OVERFLOW,
-        pool_pre_ping=True,
-        pool_recycle=3600,  # Recycle connections every hour
-    )
-    
-    # Sync engine for migration and initial setup
-    sync_engine = create_engine(
-        sync_database_url,
-        echo=settings.DEBUG,
-        pool_size=settings.DATABASE_POOL_SIZE,
-        max_overflow=settings.DATABASE_MAX_OVERFLOW,
-        pool_pre_ping=True,
-        pool_recycle=3600,
-    )
+    async_database_url = database_url
+sync_database_url = database_url.replace("postgresql+asyncpg://", "postgresql://")
+
+async_engine = create_async_engine(
+    async_database_url,
+    echo=settings.DEBUG,
+    pool_size=settings.DATABASE_POOL_SIZE,
+    max_overflow=settings.DATABASE_MAX_OVERFLOW,
+    pool_pre_ping=True,
+    pool_recycle=3600,  # Recycle connections every hour
+)
+
+# Sync engine for migration and initial setup
+sync_engine = create_engine(
+    sync_database_url,
+    echo=settings.DEBUG,
+    pool_size=settings.DATABASE_POOL_SIZE,
+    max_overflow=settings.DATABASE_MAX_OVERFLOW,
+    pool_pre_ping=True,
+    pool_recycle=3600,
+)
+{%- elif cookiecutter.database_type == "mysql" %}
+# For MySQL, use aiomysql for async and PyMySQL for sync
+if "mysql+aiomysql://" not in database_url:
+    async_database_url = database_url.replace("mysql://", "mysql+aiomysql://")
+else:
+    async_database_url = database_url
+sync_database_url = database_url.replace("mysql+aiomysql://", "mysql://")
+
+async_engine = create_async_engine(
+    async_database_url,
+    echo=settings.DEBUG,
+    pool_size=settings.DATABASE_POOL_SIZE,
+    max_overflow=settings.DATABASE_MAX_OVERFLOW,
+    pool_pre_ping=True,
+    pool_recycle=3600,
+)
+
+# Sync engine for migration and initial setup
+sync_engine = create_engine(
+    sync_database_url,
+    echo=settings.DEBUG,
+    pool_size=settings.DATABASE_POOL_SIZE,
+    max_overflow=settings.DATABASE_MAX_OVERFLOW,
+    pool_pre_ping=True,
+    pool_recycle=3600,
+)
+{%- endif %}
 
 # Async session factory
 AsyncSessionLocal = async_sessionmaker(
@@ -199,19 +208,6 @@ async def drop_tables() -> None:
 
 
 # Event listeners for connection pooling
-@event.listens_for(async_engine.sync_engine, "connect")
-def set_sqlite_pragma(dbapi_connection, connection_record):
-    """Set SQLite pragmas for better performance (if using SQLite)."""
-    if "sqlite" in settings.get_database_url():
-        cursor = dbapi_connection.cursor()
-        cursor.execute("PRAGMA foreign_keys=ON")
-        cursor.execute("PRAGMA journal_mode=WAL")
-        cursor.execute("PRAGMA synchronous=NORMAL")
-        cursor.execute("PRAGMA cache_size=1000")
-        cursor.execute("PRAGMA temp_store=memory")
-        cursor.close()
-
-
 @event.listens_for(async_engine.sync_engine, "checkout")
 def receive_checkout(dbapi_connection, connection_record, connection_proxy):
     """Log database connection checkout."""
@@ -309,29 +305,27 @@ async def execute_scalar(query: str, params: dict = None):
 
 async def table_exists(table_name: str) -> bool:
     """Check if a table exists in the database."""
-    database_url = settings.get_database_url()
-    
-    if database_url.startswith("sqlite"):
-        # SQLite query
-        query = """
-        SELECT name FROM sqlite_master 
-        WHERE type='table' AND name = :table_name;
-        """
-    else:
-        # PostgreSQL query
-        query = """
-        SELECT EXISTS (
-            SELECT FROM information_schema.tables 
-            WHERE table_name = :table_name
-        );
-        """
+{%- if cookiecutter.database_type == "postgresql" %}
+    # PostgreSQL query
+    query = """
+    SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = :table_name
+    );
+    """
+{%- elif cookiecutter.database_type == "mysql" %}
+    # MySQL query
+    query = """
+    SELECT EXISTS (
+        SELECT TABLE_NAME FROM information_schema.TABLES 
+        WHERE TABLE_NAME = :table_name
+    );
+    """
+{%- endif %}
     
     try:
         result = await execute_scalar(query, {"table_name": table_name})
-        if database_url.startswith("sqlite"):
-            return result is not None
-        else:
-            return bool(result)
+        return bool(result)
     except Exception:
         return False
 

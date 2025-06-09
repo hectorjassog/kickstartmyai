@@ -23,15 +23,18 @@ from app.models.user import User
 from app.core.security.password import get_password_hash
 
 
-# Test database URL
-TEST_DATABASE_URL = "sqlite+aiosqlite:///./test.db"
+# Test database URL - Use test PostgreSQL database
+{%- if cookiecutter.database_type == "postgresql" %}
+TEST_DATABASE_URL = "postgresql+asyncpg://postgres:postgres@localhost:5432/test_db"
+{%- elif cookiecutter.database_type == "mysql" %}
+TEST_DATABASE_URL = "mysql+aiomysql://root:root@localhost:3306/test_db"
+{%- endif %}
 
 # Create test engine
 test_engine = create_async_engine(
     TEST_DATABASE_URL,
-    poolclass=StaticPool,
-    connect_args={"check_same_thread": False},
-    echo=False
+    echo=False,
+    pool_pre_ping=True,
 )
 
 # Test session maker

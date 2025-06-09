@@ -71,8 +71,8 @@ jobs:
     
     - name: Test basic template generation
       run: |
-        # Generate basic project with minimal dependencies (cross-platform compatible)
-        cookiecutter ./kickstartmyai/templates --no-input project_name="Test Project Basic" project_description="A basic test project" author_name="Test Author" author_email="test@example.com" version="0.1.0" database_type="sqlite" include_openai="n" include_anthropic="n" include_gemini="n" include_redis="n" include_monitoring="n" include_load_testing="n" use_https="n"
+        # Generate basic project with minimal dependencies (PostgreSQL)
+        cookiecutter ./kickstartmyai/templates --no-input project_name="Test Project Basic" project_description="A basic test project" author_name="Test Author" author_email="test@example.com" version="0.1.0" database_type="postgresql" include_openai="n" include_anthropic="n" include_gemini="n" include_redis="n" include_monitoring="n" include_load_testing="n" use_https="n"
         
         # Find and validate the generated project directory (cross-platform)
         python -c "
@@ -253,7 +253,7 @@ jobs:
         # Create .env file with required variables
         with open('.env', 'w') as f:
             f.write('SECRET_KEY=test-secret-key-for-validation\\n')
-            f.write('DATABASE_URL=sqlite:///./test.db\\n')
+            f.write('DATABASE_URL=postgresql://postgres:postgres@localhost:5432/test_db\\n')
             f.write('REDIS_URL=redis://localhost:6379\\n')
         
         # Create and activate virtual environment
@@ -281,7 +281,7 @@ jobs:
         print('Testing app import...')
         env = os.environ.copy()
         env['SECRET_KEY'] = 'test-secret-key-for-validation'
-        env['DATABASE_URL'] = 'sqlite:///./test.db'
+        env['DATABASE_URL'] = 'postgresql://postgres:postgres@localhost:5432/test_db'
         
         result = subprocess.run([python_exe, '-c', 'from app.main import app; print(\"SUCCESS: App imported successfully\")'], env=env, capture_output=True, text=True)
         print(result.stdout)
@@ -329,7 +329,7 @@ jobs:
       run: |
         # Generate project based on matrix config
         if [ "${{ matrix.config }}" == "minimal" ]; then
-          cookiecutter ./kickstartmyai/templates --no-input project_name="Test Project Minimal" project_description="A minimal test project for validation" author_name="Test Author" author_email="test@example.com" version="0.1.0" database_type="sqlite" include_openai="n" include_anthropic="n" include_gemini="n" include_redis="n" include_monitoring="n" include_load_testing="n" use_https="n"
+          cookiecutter ./kickstartmyai/templates --no-input project_name="Test Project Minimal" project_description="A minimal test project for validation" author_name="Test Author" author_email="test@example.com" version="0.1.0" database_type="postgresql" include_openai="n" include_anthropic="n" include_gemini="n" include_redis="n" include_monitoring="n" include_load_testing="n" use_https="n"
         else
           cookiecutter ./kickstartmyai/templates --no-input project_name="Test Project Full" project_description="A full test project for validation" author_name="Test Author" author_email="test@example.com" version="0.1.0" database_type="postgresql" include_openai="y" include_anthropic="y" include_gemini="n" include_redis="y" include_monitoring="y" include_load_testing="n" use_https="n"
         fi
@@ -364,7 +364,7 @@ jobs:
         # Create .env file for testing
         with open('.env', 'w') as f:
             f.write('SECRET_KEY=test-secret-key\\n')
-            f.write('DATABASE_URL=sqlite:///./test.db\\n')
+            f.write('DATABASE_URL=postgresql://postgres:postgres@localhost:5432/test_db\\n')
         
         # Create virtual environment
         subprocess.run([sys.executable, '-m', 'venv', '.venv'], check=True)
@@ -386,7 +386,7 @@ jobs:
         # Test basic import with environment
         env = os.environ.copy()
         env['SECRET_KEY'] = 'test-secret-key'
-        env['DATABASE_URL'] = 'sqlite:///./test.db'
+        env['DATABASE_URL'] = 'postgresql://postgres:postgres@localhost:5432/test_db'
         
         result = subprocess.run([python_exe, '-c', 'from app.main import app; print(\"SUCCESS: App imported successfully\")'], env=env, capture_output=True, text=True)
         print(result.stdout)

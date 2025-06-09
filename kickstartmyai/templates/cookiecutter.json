@@ -7,7 +7,7 @@
     "version": "0.1.0",
     "python_version": "3.11",
     
-    "database_type": ["postgresql", "mysql", "sqlite"],
+    "database_type": ["postgresql", "mysql"],
     "database_name": "{{ cookiecutter.project_slug }}_db",
     "database_user": "{{ cookiecutter.project_slug }}_user",
     

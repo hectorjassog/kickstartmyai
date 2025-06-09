@@ -50,25 +50,27 @@ class MigrationUtils:
     async def list_tables(self) -> List[str]:
         """List all tables in the database."""
         async with self.engine.connect() as conn:
-            if "postgresql" in str(settings.DATABASE_URL):
-                result = await conn.execute(
-                    text("""
-                        SELECT tablename 
-                        FROM pg_tables 
-                        WHERE schemaname = 'public'
-                        ORDER BY tablename
-                    """)
-                )
-            else:
-                # SQLite
-                result = await conn.execute(
-                    text("""
-                        SELECT name 
-                        FROM sqlite_master 
-                        WHERE type='table' 
-                        ORDER BY name
-                    """)
-                )
+{%- if cookiecutter.database_type == "postgresql" %}
+            # PostgreSQL
+            result = await conn.execute(
+                text("""
+                    SELECT tablename 
+                    FROM pg_tables 
+                    WHERE schemaname = 'public'
+                    ORDER BY tablename
+                """)
+            )
+{%- elif cookiecutter.database_type == "mysql" %}
+            # MySQL
+            result = await conn.execute(
+                text("""
+                    SELECT table_name 
+                    FROM information_schema.tables 
+                    WHERE table_schema = DATABASE()
+                    ORDER BY table_name
+                """)
+            )
+{%- endif %}
             
             return [row[0] for row in result.fetchall()]
     

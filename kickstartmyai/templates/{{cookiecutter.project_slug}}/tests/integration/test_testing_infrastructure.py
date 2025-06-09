@@ -16,7 +16,11 @@ from fastapi.testclient import TestClient
 # Test environment setup
 TEST_ENV = {
     "SECRET_KEY": "test-secret-key-for-testing-only-not-for-production",
-    "DATABASE_URL": "sqlite:///./test.db",
+{%- if cookiecutter.database_type == "postgresql" %}
+    "DATABASE_URL": "postgresql://postgres:postgres@localhost:5432/test_db",
+{%- elif cookiecutter.database_type == "mysql" %}
+    "DATABASE_URL": "mysql://root:root@localhost:3306/test_db",
+{%- endif %}
     "REDIS_URL": "redis://localhost:6379/1",
     "ENVIRONMENT": "testing",
     "DEBUG": "false",
@@ -322,7 +326,11 @@ class TestDatabaseIntegration:
     def test_database_engine_creation(self):
         """Test database engine can be created."""
         with patch.dict(os.environ, TEST_ENV):
-            # Use SQLite for testing
+{%- if cookiecutter.database_type == "postgresql" %}
+            # Use PostgreSQL for testing
+{%- elif cookiecutter.database_type == "mysql" %}
+            # Use MySQL for testing
+{%- endif %}
             from sqlalchemy import create_engine
             from app.core.config import Settings
             

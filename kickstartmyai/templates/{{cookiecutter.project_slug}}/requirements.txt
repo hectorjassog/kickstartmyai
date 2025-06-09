@@ -17,8 +17,6 @@ asyncpg==0.29.0
 {%- elif cookiecutter.database_type == "mysql" %}
 PyMySQL==1.1.0
 aiomysql==0.2.0
-{%- elif cookiecutter.database_type == "sqlite" %}
-aiosqlite==0.19.0
 {%- endif %}
 
 # Authentication & Security

@@ -195,14 +195,22 @@ class TestSettingsEnvironments:
             "SECRET_KEY": "dev-secret",
             "DEBUG": "true",
             "RELOAD": "true",
-            "DATABASE_URL": "sqlite:///./dev.db"
+{%- if cookiecutter.database_type == "postgresql" %}
+            "DATABASE_URL": "postgresql://postgres:postgres@localhost:5432/dev_db"
+{%- elif cookiecutter.database_type == "mysql" %}
+            "DATABASE_URL": "mysql://root:root@localhost:3306/dev_db"
+{%- endif %}
         }
         
         with patch.dict(os.environ, env_vars):
             settings = Settings()
             assert settings.DEBUG is True
             assert settings.RELOAD is True
-            assert "sqlite" in settings.DATABASE_URL
+{%- if cookiecutter.database_type == "postgresql" %}
+            assert "postgresql" in settings.DATABASE_URL
+{%- elif cookiecutter.database_type == "mysql" %}
+            assert "mysql" in settings.DATABASE_URL
+{%- endif %}
 
     def test_production_environment(self):
         """Test production environment settings."""
@@ -225,7 +233,11 @@ class TestSettingsEnvironments:
         """Test testing environment settings."""
         env_vars = {
             "SECRET_KEY": "test-secret-key",
-            "DATABASE_URL": "sqlite:///./test.db",
+{%- if cookiecutter.database_type == "postgresql" %}
+            "DATABASE_URL": "postgresql://postgres:postgres@localhost:5432/test_db",
+{%- elif cookiecutter.database_type == "mysql" %}
+            "DATABASE_URL": "mysql://root:root@localhost:3306/test_db",
+{%- endif %}
             "REDIS_URL": "redis://localhost:6379/1",
             "CACHE_ENABLED": "false",
             "AI_REQUEST_TIMEOUT": "5"  # Shorter timeout for tests
@@ -233,7 +245,11 @@ class TestSettingsEnvironments:
         
         with patch.dict(os.environ, env_vars):
             settings = Settings()
-            assert "sqlite" in settings.DATABASE_URL
+{%- if cookiecutter.database_type == "postgresql" %}
+            assert "postgresql" in settings.DATABASE_URL
+{%- elif cookiecutter.database_type == "mysql" %}
+            assert "mysql" in settings.DATABASE_URL
+{%- endif %}
             assert settings.CACHE_ENABLED is False
             assert settings.AI_REQUEST_TIMEOUT == 5
 
@@ -381,11 +397,17 @@ class TestSettingsUtilityMethods:
 
     def test_database_engine_detection(self):
         """Test database engine detection from URL."""
+{%- if cookiecutter.database_type == "postgresql" %}
         test_cases = [
             ("postgresql://user:pass@host:5432/db", "postgresql"),
-            ("sqlite:///./test.db", "sqlite"),
-            ("mysql://user:pass@host:3306/db", "mysql"),
+            ("postgresql+asyncpg://user:pass@host:5432/db", "postgresql"),
         ]
+{%- elif cookiecutter.database_type == "mysql" %}
+        test_cases = [
+            ("mysql://user:pass@host:3306/db", "mysql"),
+            ("mysql+aiomysql://user:pass@host:3306/db", "mysql"),
+        ]
+{%- endif %}
         
         for db_url, expected_engine in test_cases:
             env_vars = {

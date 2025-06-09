@@ -335,7 +335,11 @@ class TestTemplateGeneration:
         env_file = project_dir / ".env"
         env_content = """
 SECRET_KEY=test-secret-key-for-testing-only
-DATABASE_URL=sqlite:///./test.db
+{%- if cookiecutter.database_type == "postgresql" %}
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/test_db
+{%- elif cookiecutter.database_type == "mysql" %}
+DATABASE_URL=mysql://root:root@localhost:3306/test_db
+{%- endif %}
 REDIS_URL=redis://localhost:6379/0
 OPENAI_API_KEY=test-key
 ANTHROPIC_API_KEY=test-key
