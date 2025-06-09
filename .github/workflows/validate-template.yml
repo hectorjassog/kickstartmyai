@@ -77,23 +77,45 @@ jobs:
         # Generate project
         cookiecutter ./kickstartmyai/templates --config-file cookiecutter_config.json --no-input
         
-        # Find the generated project directory using smart detection
-        PROJECT_SLUG=$(python -c "import os; exclude={'.', '..', '.git', '.github', '.claude', 'kickstartmyai', 'deprecated', 'docs', 'sandbox', 'kickstartmyai.egg-info'}; candidates=[item for item in os.listdir('.') if item not in exclude and not item.startswith('.') and not any(item.endswith(ext) for ext in ['.json', '.txt', '.md', '.toml', '.py']) and os.path.isdir(item) and any(os.path.exists(os.path.join(item, f)) for f in ['README.md', 'requirements.txt', 'app'])]; print(candidates[0] if candidates else '')")
+        # Find and validate the generated project directory (cross-platform)
+        python -c "
+        import os
+        import sys
+        exclude = {'.', '..', '.git', '.github', '.claude', 'kickstartmyai', 'deprecated', 'docs', 'sandbox', 'kickstartmyai.egg-info'}
+        candidates = [item for item in os.listdir('.') if item not in exclude and not item.startswith('.') and not any(item.endswith(ext) for ext in ['.json', '.txt', '.md', '.toml', '.py']) and os.path.isdir(item) and any(os.path.exists(os.path.join(item, f)) for f in ['README.md', 'requirements.txt', 'app'])]
         
-        if [ -z "$PROJECT_SLUG" ] || [ ! -d "$PROJECT_SLUG" ]; then
-          echo "No generated project directory found!"
-          echo "Available directories:"
-          ls -la
-          exit 1
-        fi
+        if not candidates:
+            print('No generated project directory found!')
+            print('Available directories:')
+            for item in os.listdir('.'):
+                if os.path.isdir(item):
+                    print(f'  {item}')
+            sys.exit(1)
         
-        echo "Found created project: $PROJECT_SLUG"
+        project_slug = candidates[0]
+        print(f'Found created project: {project_slug}')
         
-        # Verify project was created
-        ls -la $PROJECT_SLUG/
-        test -f $PROJECT_SLUG/README.md
-        test -f $PROJECT_SLUG/requirements.txt
-        test -f $PROJECT_SLUG/app/main.py
+        # Verify project structure
+        required_files = [
+            os.path.join(project_slug, 'README.md'),
+            os.path.join(project_slug, 'requirements.txt'), 
+            os.path.join(project_slug, 'app', 'main.py')
+        ]
+        
+        for file_path in required_files:
+            if not os.path.exists(file_path):
+                print(f'ERROR: Required file missing: {file_path}')
+                sys.exit(1)
+        
+        print('✅ All required files found')
+        print(f'Project contents:')
+        for item in os.listdir(project_slug):
+            print(f'  {item}')
+        
+        # Save project name for subsequent steps
+        with open('project_name.txt', 'w') as f:
+            f.write(project_slug)
+        "
     
     - name: Upload validation logs
       if: always()
@@ -177,46 +199,101 @@ jobs:
         # Generate project
         cookiecutter ./kickstartmyai/templates --config-file cookiecutter_config.json --no-input
         
-        # Find the generated project directory
-        PROJECT_SLUG=$(python -c "import os; exclude={'.', '..', '.git', '.github', '.claude', 'kickstartmyai', 'deprecated', 'docs', 'sandbox', 'kickstartmyai.egg-info'}; candidates=[item for item in os.listdir('.') if item not in exclude and not item.startswith('.') and not any(item.endswith(ext) for ext in ['.json', '.txt', '.md', '.toml', '.py']) and os.path.isdir(item) and any(os.path.exists(os.path.join(item, f)) for f in ['README.md', 'requirements.txt', 'app'])]; print(candidates[0] if candidates else '')")
+        # Find and validate the generated project directory
+        python -c "
+        import os
+        import sys
+        exclude = {'.', '..', '.git', '.github', '.claude', 'kickstartmyai', 'deprecated', 'docs', 'sandbox', 'kickstartmyai.egg-info'}
+        candidates = [item for item in os.listdir('.') if item not in exclude and not item.startswith('.') and not any(item.endswith(ext) for ext in ['.json', '.txt', '.md', '.toml', '.py']) and os.path.isdir(item) and any(os.path.exists(os.path.join(item, f)) for f in ['README.md', 'requirements.txt', 'app'])]
         
-        if [ -z "$PROJECT_SLUG" ] || [ ! -d "$PROJECT_SLUG" ]; then
-          echo "No generated project directory found!"
-          echo "Available directories:"
-          ls -la
-          exit 1
-        fi
+        if not candidates:
+            print('ERROR: No generated project directory found!')
+            sys.exit(1)
         
-        echo "Found created project: $PROJECT_SLUG"
+        project_slug = candidates[0]
+        print(f'Found created project: {project_slug}')
         
-        # Verify project structure
-        ls -la $PROJECT_SLUG/
-        test -f $PROJECT_SLUG/docker-compose.yml
-        test -f $PROJECT_SLUG/Dockerfile
+        # Verify project structure for full-featured project
+        required_files = [
+            os.path.join(project_slug, 'README.md'),
+            os.path.join(project_slug, 'requirements.txt'),
+            os.path.join(project_slug, 'app', 'main.py'),
+            os.path.join(project_slug, 'docker-compose.yml'),
+            os.path.join(project_slug, 'Dockerfile')
+        ]
+        
+        for file_path in required_files:
+            if not os.path.exists(file_path):
+                print(f'ERROR: Required file missing: {file_path}')
+                sys.exit(1)
+        
+        print('✅ All required files found')
+        
+        # Save project name for subsequent steps
+        with open('project_name.txt', 'w') as f:
+            f.write(project_slug)
+        "
     
-    - name: Test generated project
+    - name: Test generated project 
       run: |
-        # Find the generated project directory dynamically
-        PROJECT_SLUG=$(python -c "import os; exclude={'.', '..', '.git', '.github', '.claude', 'kickstartmyai', 'deprecated', 'docs', 'sandbox', 'kickstartmyai.egg-info'}; candidates=[item for item in os.listdir('.') if item not in exclude and not item.startswith('.') and not any(item.endswith(ext) for ext in ['.json', '.txt', '.md', '.toml', '.py']) and os.path.isdir(item) and any(os.path.exists(os.path.join(item, f)) for f in ['README.md', 'requirements.txt', 'app'])]; print(candidates[0] if candidates else '')")
+        # Get project name and test it
+        python -c "
+        with open('project_name.txt', 'r') as f: 
+            project_slug = f.read().strip()
+        print('PROJECT_SLUG=' + project_slug)
+        " > project_vars.txt
         
-        if [ -z "$PROJECT_SLUG" ] || [ ! -d "$PROJECT_SLUG" ]; then
-          echo "No generated project directory found!"
-          ls -la
-          exit 1
-        fi
+        # Source the project name (cross-platform)
+        python -c "
+        import os
+        import sys
+        import subprocess
         
-        echo "Testing project: $PROJECT_SLUG"
-        cd $PROJECT_SLUG
+        # Read project name
+        with open('project_name.txt', 'r') as f:
+            project_slug = f.read().strip()
         
-        # Create virtual environment
-        python -m venv .venv
-        source .venv/bin/activate
+        print(f'Testing project: {project_slug}')
+        os.chdir(project_slug)
+        
+        # Create .env file with required variables
+        with open('.env', 'w') as f:
+            f.write('SECRET_KEY=test-secret-key-for-validation\\n')
+            f.write('DATABASE_URL=sqlite:///./test.db\\n')
+            f.write('REDIS_URL=redis://localhost:6379\\n')
+        
+        # Create and activate virtual environment
+        subprocess.run([sys.executable, '-m', 'venv', '.venv'], check=True)
+        
+        # Get cross-platform paths
+        if os.name == 'nt':
+            pip_exe = os.path.join('.venv', 'Scripts', 'pip.exe')
+            python_exe = os.path.join('.venv', 'Scripts', 'python.exe')
+        else:
+            pip_exe = os.path.join('.venv', 'bin', 'pip')
+            python_exe = os.path.join('.venv', 'bin', 'python')
         
         # Install dependencies
-        pip install -r requirements.txt
+        print('Installing dependencies...')
+        result = subprocess.run([pip_exe, 'install', '-r', 'requirements.txt'], capture_output=True, text=True)
+        if result.returncode != 0:
+            print('Install failed:', result.stderr)
+            sys.exit(1)
         
-        # Test basic functionality
-        python -c "from app.main import app; print('FastAPI app imported successfully')"
+        # Test basic import with environment variables
+        print('Testing app import...')
+        env = os.environ.copy()
+        env['SECRET_KEY'] = 'test-secret-key-for-validation'
+        env['DATABASE_URL'] = 'sqlite:///./test.db'
+        
+        result = subprocess.run([python_exe, '-c', 'from app.main import app; print(\"✅ App imported successfully\")'], env=env, capture_output=True, text=True)
+        print(result.stdout)
+        if result.returncode != 0:
+            print('Import test failed:', result.stderr)
+            sys.exit(1)
+        
+        print('✅ Project test completed successfully')
+        "
     
     - name: Upload full project
       if: always()
@@ -265,33 +342,61 @@ jobs:
     
     - name: Test generated project structure
       run: |
-        # Find the generated project directory dynamically
-        PROJECT_SLUG=$(python -c "import os; exclude={'.', '..', '.git', '.github', '.claude', 'kickstartmyai', 'deprecated', 'docs', 'sandbox', 'kickstartmyai.egg-info'}; candidates=[item for item in os.listdir('.') if item not in exclude and not item.startswith('.') and not any(item.endswith(ext) for ext in ['.json', '.txt', '.md', '.toml', '.py']) and os.path.isdir(item) and any(os.path.exists(os.path.join(item, f)) for f in ['README.md', 'requirements.txt', 'app'])]; print(candidates[0] if candidates else '')")
+        # Find and test the generated project directory (cross-platform)
+        python -c "
+        import os
+        import sys
+        import subprocess
         
-        if [ -z "$PROJECT_SLUG" ] || [ ! -d "$PROJECT_SLUG" ]; then
-          echo "No generated project directory found!"
-          ls -la
-          exit 1
-        fi
+        # Find project directory
+        exclude = {'.', '..', '.git', '.github', '.claude', 'kickstartmyai', 'deprecated', 'docs', 'sandbox', 'kickstartmyai.egg-info'}
+        candidates = [item for item in os.listdir('.') if item not in exclude and not item.startswith('.') and not any(item.endswith(ext) for ext in ['.json', '.txt', '.md', '.toml', '.py']) and os.path.isdir(item) and any(os.path.exists(os.path.join(item, f)) for f in ['README.md', 'requirements.txt', 'app'])]
         
-        echo "Testing project: $PROJECT_SLUG"
-        cd "$PROJECT_SLUG"
+        if not candidates:
+            print('ERROR: No generated project directory found!')
+            sys.exit(1)
+        
+        project_slug = candidates[0]
+        print(f'Testing project: {project_slug}')
+        os.chdir(project_slug)
         
         # Verify basic structure
-        test -f README.md
-        test -f requirements.txt
-        test -f app/main.py
-        test -f Makefile
+        required_files = ['README.md', 'requirements.txt', 'app/main.py', 'Makefile']
+        for file_path in required_files:
+            if not os.path.exists(file_path):
+                print(f'ERROR: Required file missing: {file_path}')
+                sys.exit(1)
+        
+        # Create .env file for testing
+        with open('.env', 'w') as f:
+            f.write('SECRET_KEY=test-secret-key\\n')
+            f.write('DATABASE_URL=sqlite:///./test.db\\n')
         
         # Create virtual environment
-        python -m venv .venv
-        source .venv/bin/activate
+        subprocess.run([sys.executable, '-m', 'venv', '.venv'], check=True)
+        
+        # Cross-platform paths
+        if os.name == 'nt':
+            pip_exe = os.path.join('.venv', 'Scripts', 'pip.exe')
+            python_exe = os.path.join('.venv', 'Scripts', 'python.exe')
+        else:
+            pip_exe = os.path.join('.venv', 'bin', 'pip')
+            python_exe = os.path.join('.venv', 'bin', 'python')
         
         # Install dependencies
-        pip install -r requirements.txt
+        subprocess.run([pip_exe, 'install', '-r', 'requirements.txt'], check=True)
         
-        # Test basic import
-        python -c "from app.main import app; print('App imported successfully')"
+        # Test basic import with environment
+        env = os.environ.copy()
+        env['SECRET_KEY'] = 'test-secret-key'
+        env['DATABASE_URL'] = 'sqlite:///./test.db'
+        
+        result = subprocess.run([python_exe, '-c', 'from app.main import app; print(\"✅ App imported successfully\")'], env=env, capture_output=True, text=True)
+        print(result.stdout)
+        if result.returncode != 0:
+            print('Import failed:', result.stderr)
+            sys.exit(1)
+        "
 
   security-scan:
     name: Security Scanning
@@ -359,53 +464,105 @@ jobs:
     
     - name: Validate README instructions
       run: |
-        # Find the generated project directory dynamically
-        PROJECT_SLUG=$(python -c "import os; exclude={'.', '..', '.git', '.github', '.claude', 'kickstartmyai', 'deprecated', 'docs', 'sandbox', 'kickstartmyai.egg-info'}; candidates=[item for item in os.listdir('.') if item not in exclude and not item.startswith('.') and not any(item.endswith(ext) for ext in ['.json', '.txt', '.md', '.toml', '.py']) and os.path.isdir(item) and any(os.path.exists(os.path.join(item, f)) for f in ['README.md', 'requirements.txt', 'app'])]; print(candidates[0] if candidates else '')")
+        # Find and validate the generated project directory (cross-platform)
+        python -c "
+        import os
+        import sys
+        import subprocess
         
-        if [ -z "$PROJECT_SLUG" ] || [ ! -d "$PROJECT_SLUG" ]; then
-          echo "No generated project directory found!"
-          ls -la
-          exit 1
-        fi
+        # Find project directory
+        exclude = {'.', '..', '.git', '.github', '.claude', 'kickstartmyai', 'deprecated', 'docs', 'sandbox', 'kickstartmyai.egg-info'}
+        candidates = [item for item in os.listdir('.') if item not in exclude and not item.startswith('.') and not any(item.endswith(ext) for ext in ['.json', '.txt', '.md', '.toml', '.py']) and os.path.isdir(item) and any(os.path.exists(os.path.join(item, f)) for f in ['README.md', 'requirements.txt', 'app'])]
         
-        echo "Testing project: $PROJECT_SLUG"
-        cd $PROJECT_SLUG
+        if not candidates:
+            print('ERROR: No generated project directory found!')
+            sys.exit(1)
         
-        # Verify project was created correctly
-        test -f README.md
-        test -f requirements.txt
-        test -f app/main.py
+        project_slug = candidates[0]
+        print(f'Testing project: {project_slug}')
+        os.chdir(project_slug)
         
-        # Test that all commands in README work
-        python -m venv .venv
-        source .venv/bin/activate
+        # Verify required files exist
+        required_files = ['README.md', 'requirements.txt', 'app/main.py']
+        for file_path in required_files:
+            if not os.path.exists(file_path):
+                print(f'ERROR: Required file missing: {file_path}')
+                sys.exit(1)
         
-        # Follow README setup instructions
-        pip install -r requirements.txt
+        # Create .env file for testing
+        with open('.env', 'w') as f:
+            f.write('SECRET_KEY=test-secret-key\\n')
+            f.write('DATABASE_URL=postgresql://postgres:postgres@localhost:5432/test_db\\n')
+            f.write('REDIS_URL=redis://localhost:6379\\n')
         
-        # Test basic functionality
-        python -c "from app.main import app; print('Documentation test passed')"
+        # Create virtual environment and test README instructions
+        subprocess.run([sys.executable, '-m', 'venv', '.venv'], check=True)
+        
+        # Cross-platform paths
+        if os.name == 'nt':
+            pip_exe = os.path.join('.venv', 'Scripts', 'pip.exe')
+            python_exe = os.path.join('.venv', 'Scripts', 'python.exe')
+        else:
+            pip_exe = os.path.join('.venv', 'bin', 'pip')
+            python_exe = os.path.join('.venv', 'bin', 'python')
+        
+        # Install dependencies per README
+        subprocess.run([pip_exe, 'install', '-r', 'requirements.txt'], check=True)
+        
+        # Test basic functionality with environment
+        env = os.environ.copy()
+        env['SECRET_KEY'] = 'test-secret-key'
+        env['DATABASE_URL'] = 'postgresql://postgres:postgres@localhost:5432/test_db'
+        env['REDIS_URL'] = 'redis://localhost:6379'
+        
+        result = subprocess.run([python_exe, '-c', 'from app.main import app; print(\"✅ Documentation test passed\")'], env=env, capture_output=True, text=True)
+        print(result.stdout)
+        if result.returncode != 0:
+            print('Documentation test failed:', result.stderr)
+            sys.exit(1)
+        "
     
     - name: Check documentation completeness
       run: |
-        # Find the generated project directory dynamically
-        PROJECT_SLUG=$(python -c "import os; exclude={'.', '..', '.git', '.github', '.claude', 'kickstartmyai', 'deprecated', 'docs', 'sandbox', 'kickstartmyai.egg-info'}; candidates=[item for item in os.listdir('.') if item not in exclude and not item.startswith('.') and not any(item.endswith(ext) for ext in ['.json', '.txt', '.md', '.toml', '.py']) and os.path.isdir(item) and any(os.path.exists(os.path.join(item, f)) for f in ['README.md', 'requirements.txt', 'app'])]; print(candidates[0] if candidates else '')")
+        # Find the generated project directory and check documentation (cross-platform)
+        python -c "
+        import os
+        import sys
         
-        if [ -z "$PROJECT_SLUG" ] || [ ! -d "$PROJECT_SLUG" ]; then
-          echo "No generated project directory found!"
-          ls -la
-          exit 1
-        fi
+        # Find project directory
+        exclude = {'.', '..', '.git', '.github', '.claude', 'kickstartmyai', 'deprecated', 'docs', 'sandbox', 'kickstartmyai.egg-info'}  
+        candidates = [item for item in os.listdir('.') if item not in exclude and not item.startswith('.') and not any(item.endswith(ext) for ext in ['.json', '.txt', '.md', '.toml', '.py']) and os.path.isdir(item) and any(os.path.exists(os.path.join(item, f)) for f in ['README.md', 'requirements.txt', 'app'])]
         
-        echo "Testing project: $PROJECT_SLUG"
-        cd $PROJECT_SLUG
+        if not candidates:
+            print('ERROR: No generated project directory found!')
+            sys.exit(1)
+        
+        project_slug = candidates[0]
+        print(f'Checking documentation in project: {project_slug}')
+        os.chdir(project_slug)
         
         # Verify key files exist
-        test -f README.md
+        if not os.path.exists('README.md'):
+            print('ERROR: README.md not found')
+            sys.exit(1)
         
-        # Check for basic content
-        grep -q "Installation" README.md || echo "Missing Installation section"
-        grep -q "Usage" README.md || echo "Missing Usage section"
+        # Check for basic content in README
+        with open('README.md', 'r') as f:
+            readme_content = f.read()
+        
+        sections_to_check = ['Installation', 'Usage']
+        missing_sections = []
+        
+        for section in sections_to_check:
+            if section not in readme_content:
+                missing_sections.append(section)
+        
+        if missing_sections:
+            for section in missing_sections:
+                print(f'WARNING: Missing {section} section in README')
+        else:
+            print('✅ All required documentation sections found')
+        "
 
   publish-validation-report:
     name: Publish Validation Report
