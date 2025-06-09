@@ -71,46 +71,23 @@ jobs:
     
     - name: Test basic template generation
       run: |
-        # Create config file for basic test
-        cat > cookiecutter_config.json << EOF
-        {
-          "project_name": "Test Project Basic",
-          "project_description": "A basic test project",
-          "author_name": "Test Author",
-          "author_email": "test@example.com",
-          "version": "0.1.0",
-          "database_type": "sqlite",
-          "include_openai": "n",
-          "include_anthropic": "n",
-          "include_gemini": "n",
-          "include_redis": "n",
-          "include_monitoring": "n",
-          "include_load_testing": "n",
-          "use_https": "n"
-        }
-        EOF
+        # Create config file for basic test (cross-platform compatible)
+        python -c "import json; config={'project_name': 'Test Project Basic', 'project_description': 'A basic test project', 'author_name': 'Test Author', 'author_email': 'test@example.com', 'version': '0.1.0', 'database_type': 'sqlite', 'include_openai': 'n', 'include_anthropic': 'n', 'include_gemini': 'n', 'include_redis': 'n', 'include_monitoring': 'n', 'include_load_testing': 'n', 'use_https': 'n'}; json.dump(config, open('cookiecutter_config.json', 'w'), indent=2)"
         
         # Generate project
         cookiecutter ./kickstartmyai/templates --config-file cookiecutter_config.json --no-input
         
-        # Determine the actual project slug created (based on project_name)
-        # "Test Project Basic" becomes "test_project_basic"
-        PROJECT_SLUG="test_project_basic"
+        # Find the generated project directory using smart detection
+        PROJECT_SLUG=$(python -c "import os; exclude={'.', '..', '.git', '.github', '.claude', 'kickstartmyai', 'deprecated', 'docs', 'sandbox', 'kickstartmyai.egg-info'}; candidates=[item for item in os.listdir('.') if item not in exclude and not item.startswith('.') and not any(item.endswith(ext) for ext in ['.json', '.txt', '.md', '.toml', '.py']) and os.path.isdir(item) and any(os.path.exists(os.path.join(item, f)) for f in ['README.md', 'requirements.txt', 'app'])]; print(candidates[0] if candidates else '')")
         
-        # Check if it was created with the expected name, if not find the actual name
-        if [ ! -d "$PROJECT_SLUG" ]; then
-          echo "Expected directory $PROJECT_SLUG not found, looking for created project..."
-                     # Find the directory that was actually created (exclude known directories)
-           ACTUAL_SLUG=$(ls -1 | grep -v "^\\." | grep -v "kickstartmyai" | grep -v "deprecated" | grep -v "docs" | grep -v "sandbox" | grep -v "test_cookiecutter" | grep -v "\.json$" | grep -v "\.txt$" | grep -v "\.md$" | grep -v "\.toml$" | grep -v "^Makefile$" | head -1)
-          if [ -n "$ACTUAL_SLUG" ] && [ -d "$ACTUAL_SLUG" ]; then
-            PROJECT_SLUG="$ACTUAL_SLUG"
-            echo "Found created project: $PROJECT_SLUG"
-          else
-            echo "No project directory found!"
-            ls -la
-            exit 1
-          fi
+        if [ -z "$PROJECT_SLUG" ] || [ ! -d "$PROJECT_SLUG" ]; then
+          echo "No generated project directory found!"
+          echo "Available directories:"
+          ls -la
+          exit 1
         fi
+        
+        echo "Found created project: $PROJECT_SLUG"
         
         # Verify project was created
         ls -la $PROJECT_SLUG/
@@ -125,7 +102,7 @@ jobs:
         name: validation-logs-${{ matrix.os }}-py${{ matrix.python-version }}
         path: |
           *.log
-          test_project_basic/
+          */
         retention-days: 7
 
   # Linux-specific validation with services
@@ -195,29 +172,22 @@ jobs:
     - name: Generate full-featured project
       run: |
         # Create config file for full test
-        cat > cookiecutter_config.json << EOF
-        {
-          "project_name": "Full Test Project",
-          "project_description": "A full-featured test project",
-          "author_name": "Test Author",
-          "author_email": "test@example.com",
-          "version": "0.1.0",
-          "database_type": "postgresql",
-          "include_openai": "y",
-          "include_anthropic": "y",
-          "include_gemini": "n",
-          "include_redis": "y",
-          "include_monitoring": "y",
-          "include_load_testing": "n",
-          "use_https": "n"
-        }
-        EOF
+        python -c "import json; config={'project_name': 'Full Test Project', 'project_description': 'A full-featured test project', 'author_name': 'Test Author', 'author_email': 'test@example.com', 'version': '0.1.0', 'database_type': 'postgresql', 'include_openai': 'y', 'include_anthropic': 'y', 'include_gemini': 'n', 'include_redis': 'y', 'include_monitoring': 'y', 'include_load_testing': 'n', 'use_https': 'n'}; json.dump(config, open('cookiecutter_config.json', 'w'), indent=2)"
         
         # Generate project
         cookiecutter ./kickstartmyai/templates --config-file cookiecutter_config.json --no-input
         
-        # The project slug will be auto-generated as "full_test_project"
-        PROJECT_SLUG="full_test_project"
+        # Find the generated project directory
+        PROJECT_SLUG=$(python -c "import os; exclude={'.', '..', '.git', '.github', '.claude', 'kickstartmyai', 'deprecated', 'docs', 'sandbox', 'kickstartmyai.egg-info'}; candidates=[item for item in os.listdir('.') if item not in exclude and not item.startswith('.') and not any(item.endswith(ext) for ext in ['.json', '.txt', '.md', '.toml', '.py']) and os.path.isdir(item) and any(os.path.exists(os.path.join(item, f)) for f in ['README.md', 'requirements.txt', 'app'])]; print(candidates[0] if candidates else '')")
+        
+        if [ -z "$PROJECT_SLUG" ] || [ ! -d "$PROJECT_SLUG" ]; then
+          echo "No generated project directory found!"
+          echo "Available directories:"
+          ls -la
+          exit 1
+        fi
+        
+        echo "Found created project: $PROJECT_SLUG"
         
         # Verify project structure
         ls -la $PROJECT_SLUG/
@@ -226,7 +196,16 @@ jobs:
     
     - name: Test generated project
       run: |
-        PROJECT_SLUG="full_test_project"
+        # Find the generated project directory dynamically
+        PROJECT_SLUG=$(python -c "import os; exclude={'.', '..', '.git', '.github', '.claude', 'kickstartmyai', 'deprecated', 'docs', 'sandbox', 'kickstartmyai.egg-info'}; candidates=[item for item in os.listdir('.') if item not in exclude and not item.startswith('.') and not any(item.endswith(ext) for ext in ['.json', '.txt', '.md', '.toml', '.py']) and os.path.isdir(item) and any(os.path.exists(os.path.join(item, f)) for f in ['README.md', 'requirements.txt', 'app'])]; print(candidates[0] if candidates else '')")
+        
+        if [ -z "$PROJECT_SLUG" ] || [ ! -d "$PROJECT_SLUG" ]; then
+          echo "No generated project directory found!"
+          ls -la
+          exit 1
+        fi
+        
+        echo "Testing project: $PROJECT_SLUG"
         cd $PROJECT_SLUG
         
         # Create virtual environment
@@ -244,7 +223,8 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: full-project-py${{ matrix.python-version }}
-        path: full_test_project/
+        path: |
+          */
         retention-days: 7
 
   test-generated-projects:
@@ -275,41 +255,9 @@ jobs:
       run: |
         # Create config file
         if [ "${{ matrix.config }}" == "minimal" ]; then
-          cat > cookiecutter_config.json << EOF
-        {
-          "project_name": "Test Project Minimal",
-          "project_description": "A minimal test project for validation",
-          "author_name": "Test Author",
-          "author_email": "test@example.com", 
-          "version": "0.1.0",
-          "database_type": "sqlite",
-          "include_openai": "n",
-          "include_anthropic": "n",
-          "include_gemini": "n",
-          "include_redis": "n",
-          "include_monitoring": "n",
-          "include_load_testing": "n",
-          "use_https": "n"
-        }
-        EOF
+          python -c "import json; config={'project_name': 'Test Project Minimal', 'project_description': 'A minimal test project for validation', 'author_name': 'Test Author', 'author_email': 'test@example.com', 'version': '0.1.0', 'database_type': 'sqlite', 'include_openai': 'n', 'include_anthropic': 'n', 'include_gemini': 'n', 'include_redis': 'n', 'include_monitoring': 'n', 'include_load_testing': 'n', 'use_https': 'n'}; json.dump(config, open('cookiecutter_config.json', 'w'), indent=2)"
         else
-          cat > cookiecutter_config.json << EOF
-        {
-          "project_name": "Test Project Full",
-          "project_description": "A full test project for validation",
-          "author_name": "Test Author",
-          "author_email": "test@example.com", 
-          "version": "0.1.0",
-          "database_type": "postgresql",
-          "include_openai": "y",
-          "include_anthropic": "y",
-          "include_gemini": "n",
-          "include_redis": "y",
-          "include_monitoring": "y",
-          "include_load_testing": "n",
-          "use_https": "n"
-        }
-        EOF
+          python -c "import json; config={'project_name': 'Test Project Full', 'project_description': 'A full test project for validation', 'author_name': 'Test Author', 'author_email': 'test@example.com', 'version': '0.1.0', 'database_type': 'postgresql', 'include_openai': 'y', 'include_anthropic': 'y', 'include_gemini': 'n', 'include_redis': 'y', 'include_monitoring': 'y', 'include_load_testing': 'n', 'use_https': 'n'}; json.dump(config, open('cookiecutter_config.json', 'w'), indent=2)"
         fi
         
         # Generate project
@@ -317,12 +265,16 @@ jobs:
     
     - name: Test generated project structure
       run: |
-        if [ "${{ matrix.config }}" == "minimal" ]; then
-          PROJECT_SLUG="test_project_minimal"
-        else
-          PROJECT_SLUG="test_project_full"
+        # Find the generated project directory dynamically
+        PROJECT_SLUG=$(python -c "import os; exclude={'.', '..', '.git', '.github', '.claude', 'kickstartmyai', 'deprecated', 'docs', 'sandbox', 'kickstartmyai.egg-info'}; candidates=[item for item in os.listdir('.') if item not in exclude and not item.startswith('.') and not any(item.endswith(ext) for ext in ['.json', '.txt', '.md', '.toml', '.py']) and os.path.isdir(item) and any(os.path.exists(os.path.join(item, f)) for f in ['README.md', 'requirements.txt', 'app'])]; print(candidates[0] if candidates else '')")
+        
+        if [ -z "$PROJECT_SLUG" ] || [ ! -d "$PROJECT_SLUG" ]; then
+          echo "No generated project directory found!"
+          ls -la
+          exit 1
         fi
         
+        echo "Testing project: $PROJECT_SLUG"
         cd "$PROJECT_SLUG"
         
         # Verify basic structure
@@ -401,29 +353,22 @@ jobs:
     
     - name: Generate project for docs testing
       run: |
-        cat > cookiecutter_config.json << EOF
-        {
-          "project_name": "Documentation Test Project",
-          "project_description": "Testing documentation accuracy",
-          "author_name": "Test Author",
-          "author_email": "test@example.com",
-          "version": "0.1.0",
-          "database_type": "postgresql",
-          "include_openai": "y",
-          "include_anthropic": "n",
-          "include_gemini": "n",
-          "include_redis": "y",
-          "include_monitoring": "y",
-          "include_load_testing": "n",
-          "use_https": "n"
-        }
-        EOF
+        python -c "import json; config={'project_name': 'Documentation Test Project', 'project_description': 'Testing documentation accuracy', 'author_name': 'Test Author', 'author_email': 'test@example.com', 'version': '0.1.0', 'database_type': 'postgresql', 'include_openai': 'y', 'include_anthropic': 'n', 'include_gemini': 'n', 'include_redis': 'y', 'include_monitoring': 'y', 'include_load_testing': 'n', 'use_https': 'n'}; json.dump(config, open('cookiecutter_config.json', 'w'), indent=2)"
         
         cookiecutter ./kickstartmyai/templates --config-file cookiecutter_config.json --no-input
     
     - name: Validate README instructions
       run: |
-        PROJECT_SLUG="documentation_test_project"
+        # Find the generated project directory dynamically
+        PROJECT_SLUG=$(python -c "import os; exclude={'.', '..', '.git', '.github', '.claude', 'kickstartmyai', 'deprecated', 'docs', 'sandbox', 'kickstartmyai.egg-info'}; candidates=[item for item in os.listdir('.') if item not in exclude and not item.startswith('.') and not any(item.endswith(ext) for ext in ['.json', '.txt', '.md', '.toml', '.py']) and os.path.isdir(item) and any(os.path.exists(os.path.join(item, f)) for f in ['README.md', 'requirements.txt', 'app'])]; print(candidates[0] if candidates else '')")
+        
+        if [ -z "$PROJECT_SLUG" ] || [ ! -d "$PROJECT_SLUG" ]; then
+          echo "No generated project directory found!"
+          ls -la
+          exit 1
+        fi
+        
+        echo "Testing project: $PROJECT_SLUG"
         cd $PROJECT_SLUG
         
         # Verify project was created correctly
@@ -443,7 +388,16 @@ jobs:
     
     - name: Check documentation completeness
       run: |
-        PROJECT_SLUG="documentation_test_project"
+        # Find the generated project directory dynamically
+        PROJECT_SLUG=$(python -c "import os; exclude={'.', '..', '.git', '.github', '.claude', 'kickstartmyai', 'deprecated', 'docs', 'sandbox', 'kickstartmyai.egg-info'}; candidates=[item for item in os.listdir('.') if item not in exclude and not item.startswith('.') and not any(item.endswith(ext) for ext in ['.json', '.txt', '.md', '.toml', '.py']) and os.path.isdir(item) and any(os.path.exists(os.path.join(item, f)) for f in ['README.md', 'requirements.txt', 'app'])]; print(candidates[0] if candidates else '')")
+        
+        if [ -z "$PROJECT_SLUG" ] || [ ! -d "$PROJECT_SLUG" ]; then
+          echo "No generated project directory found!"
+          ls -la
+          exit 1
+        fi
+        
+        echo "Testing project: $PROJECT_SLUG"
         cd $PROJECT_SLUG
         
         # Verify key files exist
@@ -465,47 +419,7 @@ jobs:
     
     - name: Generate validation report
       run: |
-        cat > validation-report.md << EOF
-        # KickStartMyAI Validation Report
-        
-        **Date:** $(date -u)
-        **Workflow:** ${{ github.workflow }}
-        **Run ID:** ${{ github.run_id }}
-        
-        ## Summary
-        
-        - **Cross-Platform Validation:** ${{ needs.validate-cross-platform.result }}
-        - **Linux with Services:** ${{ needs.validate-linux-with-services.result }}
-        - **Generated Projects:** ${{ needs.test-generated-projects.result }}
-        - **Security Scanning:** ${{ needs.security-scan.result }}
-        - **Documentation:** ${{ needs.validate-documentation.result }}
-        
-        ## Details
-        
-        ### Cross-Platform Validation
-        Status: ${{ needs.validate-cross-platform.result }}
-        
-        ### Linux with Services
-        Status: ${{ needs.validate-linux-with-services.result }}
-        
-        ### Generated Projects Test
-        Status: ${{ needs.test-generated-projects.result }}
-        
-        ### Security Scanning
-        Status: ${{ needs.security-scan.result }}
-        
-        ### Documentation Validation
-        Status: ${{ needs.validate-documentation.result }}
-        
-        ## Artifacts
-        
-        - Validation logs and reports are available as workflow artifacts
-        - Security scan results available for 30 days
-        - Test project outputs available for 7 days
-        
-        ---
-        Generated by GitHub Actions
-        EOF
+        python -c "from datetime import datetime; report='# KickStartMyAI Validation Report\n\n**Date:** ' + datetime.utcnow().isoformat() + 'Z\n**Workflow:** ${{ github.workflow }}\n**Run ID:** ${{ github.run_id }}\n\n## Summary\n\n- **Cross-Platform Validation:** ${{ needs.validate-cross-platform.result }}\n- **Linux with Services:** ${{ needs.validate-linux-with-services.result }}\n- **Generated Projects:** ${{ needs.test-generated-projects.result }}\n- **Security Scanning:** ${{ needs.security-scan.result }}\n- **Documentation:** ${{ needs.validate-documentation.result }}\n\n## Details\n\n### Cross-Platform Validation\nStatus: ${{ needs.validate-cross-platform.result }}\n\n### Linux with Services\nStatus: ${{ needs.validate-linux-with-services.result }}\n\n### Generated Projects Test\nStatus: ${{ needs.test-generated-projects.result }}\n\n### Security Scanning\nStatus: ${{ needs.security-scan.result }}\n\n### Documentation Validation\nStatus: ${{ needs.validate-documentation.result }}\n\n## Artifacts\n\n- Validation logs and reports are available as workflow artifacts\n- Security scan results available for 30 days\n- Test project outputs available for 7 days\n\n---\nGenerated by GitHub Actions'; open('validation-report.md', 'w').write(report)"
     
     - name: Upload validation report
       uses: actions/upload-artifact@v4
