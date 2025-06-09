@@ -13,7 +13,7 @@ on:
       run_full_validation:
         description: 'Run full validation (including functionality tests)'
         required: false
-        default: 'true'
+        default: true
         type: boolean
 
 jobs:
@@ -62,12 +62,12 @@ jobs:
       uses: actions/checkout@v4
     
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
     
     - name: Cache pip dependencies
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/.cache/pip
         key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt', 'pyproject.toml') }}
@@ -94,7 +94,7 @@ jobs:
     
     - name: Install Docker (if needed)
       if: matrix.os == 'ubuntu-latest'
-      uses: docker/setup-buildx-action@v2
+      uses: docker/setup-buildx-action@v3
     
     - name: Run package installation validation
       run: |
@@ -122,7 +122,7 @@ jobs:
     
     - name: Upload validation logs
       if: always()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: validation-logs-${{ matrix.os }}-py${{ matrix.python-version }}
         path: |
@@ -144,7 +144,7 @@ jobs:
       uses: actions/checkout@v4
     
     - name: Set up Python 3.11
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.11'
     
@@ -207,7 +207,7 @@ jobs:
       uses: actions/checkout@v4
     
     - name: Set up Python 3.11
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.11'
     
@@ -229,7 +229,7 @@ jobs:
     
     - name: Upload security reports
       if: always()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: security-reports
         path: |
@@ -246,7 +246,7 @@ jobs:
       uses: actions/checkout@v4
     
     - name: Set up Python 3.11
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.11'
     
@@ -312,7 +312,7 @@ jobs:
     
     steps:
     - name: Download all artifacts
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
     
     - name: Generate validation report
       run: |
@@ -355,7 +355,7 @@ jobs:
         EOF
     
     - name: Upload validation report
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: validation-report
         path: validation-report.md
