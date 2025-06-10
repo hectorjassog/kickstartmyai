@@ -197,6 +197,9 @@ jobs:
         python -c "
         import os
         import sys
+        import subprocess
+        
+        # Find project directory
         exclude = {'.', '..', '.git', '.github', '.claude', 'kickstartmyai', 'deprecated', 'docs', 'sandbox', 'kickstartmyai.egg-info'}
         candidates = [item for item in os.listdir('.') if item not in exclude and not item.startswith('.') and not any(item.endswith(ext) for ext in ['.json', '.txt', '.md', '.toml', '.py']) and os.path.isdir(item) and any(os.path.exists(os.path.join(item, f)) for f in ['README.md', 'requirements.txt', 'app'])]
         
@@ -267,12 +270,11 @@ jobs:
             pip_exe = os.path.join('.venv', 'bin', 'pip')
             python_exe = os.path.join('.venv', 'bin', 'python')
         
-        # Install dependencies
-        print('Installing dependencies...')
-        result = subprocess.run([pip_exe, 'install', '.'], capture_output=True, text=True)
-        if result.returncode != 0:
-            print('Install failed:', result.stderr)
-            sys.exit(1)
+        # Install dependencies (use pip install . to install from pyproject.toml)
+        if '${{ matrix.config }}' == 'minimal':
+            subprocess.run([pip_exe, 'install', '.'], check=True)  # Only core dependencies
+        else:
+            subprocess.run([pip_exe, 'install', '.[redis,openai,anthropic,monitoring]'], check=True)  # Full dependencies
         
         # Test basic import with environment variables
         print('Testing app import...')
@@ -375,7 +377,10 @@ jobs:
             python_exe = os.path.join('.venv', 'bin', 'python')
         
         # Install dependencies (use pip install . to install from pyproject.toml)
-        subprocess.run([pip_exe, 'install', '.'], check=True)
+        if '${{ matrix.config }}' == 'minimal':
+            subprocess.run([pip_exe, 'install', '.'], check=True)  # Only core dependencies
+        else:
+            subprocess.run([pip_exe, 'install', '.[redis,openai,monitoring]'], check=True)  # Full dependencies
         
         # Test basic import with environment
         env = os.environ.copy()
@@ -496,7 +501,7 @@ jobs:
             python_exe = os.path.join('.venv', 'bin', 'python')
         
         # Install dependencies per README (use pip install . to install from pyproject.toml)
-        subprocess.run([pip_exe, 'install', '.'], check=True)
+        subprocess.run([pip_exe, 'install', '.[redis,openai,monitoring]'], check=True)
         
         # Test basic functionality with environment
         env = os.environ.copy()

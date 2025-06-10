@@ -5,9 +5,17 @@ from typing import AsyncGenerator, Optional, Dict, Any
 from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
-from redis.asyncio import Redis
 from jose import jwt
 from jose.exceptions import JWTError
+
+# Conditional Redis import
+{% if cookiecutter.include_redis == "y" %}
+from redis.asyncio import Redis
+{% else %}
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from redis.asyncio import Redis
+{% endif %}
 
 from app.core.config import settings
 from app.core.exceptions import (
@@ -39,6 +47,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 
 # Redis Dependencies
+{% if cookiecutter.include_redis == "y" %}
 async def get_redis() -> AsyncGenerator[Redis, None]:
     """Get Redis connection dependency."""
     redis = None
@@ -55,6 +64,14 @@ async def get_redis() -> AsyncGenerator[Redis, None]:
     finally:
         if redis:
             await redis.close()
+{% else %}
+async def get_redis():
+    """Dummy Redis dependency when Redis is disabled."""
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="Redis is not enabled in this configuration"
+    )
+{% endif %}
 
 
 # Authentication Dependencies
@@ -153,6 +170,7 @@ async def get_current_user_optional(
 
 
 # Rate Limiting Dependencies
+{% if cookiecutter.include_redis == "y" %}
 class RateLimiter:
     """Rate limiter dependency."""
     
@@ -193,6 +211,18 @@ class RateLimiter:
             if current_count >= self.requests_per_minute:
                 raise RateLimitExceededError(self.requests_per_minute, 60)
             await redis.incr(key)
+{% else %}
+class RateLimiter:
+    """Dummy rate limiter when Redis is disabled."""
+    
+    def __init__(self, requests_per_minute: int = None, burst_size: int = None):
+        self.requests_per_minute = requests_per_minute or 100
+        self.burst_size = burst_size or 10
+    
+    async def __call__(self, request: Request):
+        """No-op rate limiter when Redis is disabled."""
+        return  # Rate limiting disabled without Redis
+{% endif %}
 
 
 # Default rate limiter
@@ -337,6 +367,7 @@ def require_resource_owner(resource_type: str):
 
 
 # Cache Dependencies
+{% if cookiecutter.include_redis == "y" %}
 class CacheManager:
     """Cache manager dependency."""
     
@@ -372,6 +403,26 @@ class CacheManager:
             await redis.delete(cache_key)
         except Exception as e:
             logger.error(f"Cache delete error: {e}")
+{% else %}
+class CacheManager:
+    """Dummy cache manager when Redis is disabled."""
+    
+    def __init__(self, ttl: int = None):
+        self.ttl = ttl or 300
+        self._cache = {}  # Simple in-memory cache as fallback
+    
+    async def get(self, key: str) -> Optional[str]:
+        """Get value from memory cache."""
+        return self._cache.get(key)
+    
+    async def set(self, key: str, value: str):
+        """Set value in memory cache."""
+        self._cache[key] = value
+    
+    async def delete(self, key: str):
+        """Delete value from memory cache."""
+        self._cache.pop(key, None)
+{% endif %}
 
 
 def get_cache_manager(ttl: int = None) -> CacheManager:
@@ -392,6 +443,7 @@ async def check_database_health(db: AsyncSession = Depends(get_db)):
         )
 
 
+{% if cookiecutter.include_redis == "y" %}
 async def check_redis_health(redis: Redis = Depends(get_redis)):
     """Check Redis health."""
     try:
@@ -402,6 +454,11 @@ async def check_redis_health(redis: Redis = Depends(get_redis)):
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"Redis unhealthy: {str(e)}"
         )
+{% else %}
+async def check_redis_health():
+    """Redis health check when Redis is disabled."""
+    return {"status": "disabled", "service": "redis"}
+{% endif %}
 
 
 # Request Context Dependencies

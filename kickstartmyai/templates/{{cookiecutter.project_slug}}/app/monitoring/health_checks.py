@@ -13,11 +13,15 @@ from enum import Enum
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
+
+# Conditional Redis import
+{% if cookiecutter.include_redis == "y" %}
 import redis.asyncio as redis
+{% endif %}
 
 from app.core.config import settings
 from app.core.events import get_service
-from app.db.base import async_engine, get_redis_client
+from app.db.base import async_engine{% if cookiecutter.include_redis == "y" %}, get_redis_client{% endif %}
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +60,9 @@ class HealthChecker:
     def __init__(self):
         self.checks = {
             "database": self.check_database,
+{% if cookiecutter.include_redis == "y" %}
             "redis": self.check_redis,
+{% endif %}
             "ai_services": self.check_ai_services,
             "disk_space": self.check_disk_space,
             "memory": self.check_memory,
@@ -201,6 +207,7 @@ class HealthChecker:
                 message=f"Database connection failed: {str(e)}",
             )
     
+    {% if cookiecutter.include_redis == "y" %}
     async def check_redis(self) -> ComponentHealth:
         """Check Redis connectivity and performance."""
         try:
@@ -267,6 +274,7 @@ class HealthChecker:
                 status=HealthStatus.UNHEALTHY,
                 message=f"Redis check failed: {str(e)}",
             )
+    {% endif %}
     
     async def check_ai_services(self) -> ComponentHealth:
         """Check AI service configurations and availability."""
