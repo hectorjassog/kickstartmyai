@@ -269,7 +269,7 @@ jobs:
         
         # Install dependencies
         print('Installing dependencies...')
-        result = subprocess.run([pip_exe, 'install', '-r', 'requirements.txt'], capture_output=True, text=True)
+        result = subprocess.run([pip_exe, 'install', '.'], capture_output=True, text=True)
         if result.returncode != 0:
             print('Install failed:', result.stderr)
             sys.exit(1)
@@ -374,8 +374,8 @@ jobs:
             pip_exe = os.path.join('.venv', 'bin', 'pip')
             python_exe = os.path.join('.venv', 'bin', 'python')
         
-        # Install dependencies (setuptools now included in requirements.txt)
-        subprocess.run([pip_exe, 'install', '-r', 'requirements.txt'], check=True)
+        # Install dependencies (use pip install . to install from pyproject.toml)
+        subprocess.run([pip_exe, 'install', '.'], check=True)
         
         # Test basic import with environment
         env = os.environ.copy()
@@ -495,8 +495,8 @@ jobs:
             pip_exe = os.path.join('.venv', 'bin', 'pip')
             python_exe = os.path.join('.venv', 'bin', 'python')
         
-        # Install dependencies per README (setuptools now included)
-        subprocess.run([pip_exe, 'install', '-r', 'requirements.txt'], check=True)
+        # Install dependencies per README (use pip install . to install from pyproject.toml)
+        subprocess.run([pip_exe, 'install', '.'], check=True)
         
         # Test basic functionality with environment
         env = os.environ.copy()

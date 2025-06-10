@@ -26,31 +26,69 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Application Frameworks",
 ]
 
+# Core dependencies only - use requirements.txt for conditional dependencies
 dependencies = [
     "fastapi>=0.104.1",
     "uvicorn[standard]>=0.24.0",
-    "pydantic>=2.5.0",
+    "pydantic[email]>=2.5.0",
     "pydantic-settings>=2.1.0",
     "sqlalchemy>=2.0.23",
-    "psycopg2-binary>=2.9.9",
     "alembic>=1.13.1",
+    "greenlet>=3.0.1",
+{%- if cookiecutter.database_type == "postgresql" %}
+    "psycopg2-binary>=2.9.9",
+    "asyncpg>=0.29.0",
+{%- elif cookiecutter.database_type == "mysql" %}
+    "PyMySQL>=1.1.0",
+    "aiomysql>=0.2.0",
+{%- endif %}
     "python-jose[cryptography]>=3.3.0",
     "passlib[bcrypt]>=1.7.4",
     "python-multipart>=0.0.6",
     "httpx>=0.25.2",
     "aiofiles>=23.2.1",
-    "redis>=5.0.1",
-    "openai>=1.3.7",
-    "anthropic>=0.7.7",
-    "structlog>=23.2.0",
-    "sentry-sdk[fastapi]>=1.38.0",
+    "numpy>=1.24.3",
     "python-dotenv>=1.0.0",
     "typer>=0.9.0",
     "rich>=13.7.0",
     "boto3>=1.34.0",
+    "setuptools>=65.0.0",
 ]
 
 [project.optional-dependencies]
+# Redis support
+{%- if cookiecutter.include_redis == "y" %}
+redis = [
+    "redis>=5.0.1",
+]
+{%- endif %}
+
+# AI providers
+{%- if cookiecutter.include_openai == "y" %}
+openai = [
+    "openai>=1.3.7",
+]
+{%- endif %}
+{%- if cookiecutter.include_anthropic == "y" %}
+anthropic = [
+    "anthropic>=0.7.7",
+]
+{%- endif %}
+{%- if cookiecutter.include_gemini == "y" %}
+gemini = [
+    "google-generativeai>=0.3.2",
+]
+{%- endif %}
+
+# Monitoring and logging
+{%- if cookiecutter.include_monitoring == "y" %}
+monitoring = [
+    "structlog>=23.2.0",
+    "sentry-sdk[fastapi]>=1.38.0",
+]
+{%- endif %}
+
+# Development dependencies
 dev = [
     "pytest>=7.4.3",
     "pytest-asyncio>=0.21.1",
@@ -64,7 +102,9 @@ dev = [
     "flake8>=6.1.0",
     "mypy>=1.7.1",
     "pre-commit>=3.6.0",
+{%- if cookiecutter.include_load_testing == "y" %}
     "locust>=2.17.0",
+{%- endif %}
 ]
 
 test = [
@@ -82,6 +122,9 @@ test = [
 
 [tool.hatch.version]
 path = "app/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
 
 [tool.black]
 line-length = 88
