@@ -1,27 +1,54 @@
 """Google Gemini provider implementation."""
 
 import asyncio
-from typing import List, Optional, AsyncGenerator, Dict, Any
-import google.generativeai as genai
-from google.generativeai.types import HarmCategory, HarmBlockThreshold
+from typing import Dict, List, Optional, AsyncGenerator, Any
+try:
+    import google.generativeai as genai
+except ImportError:
+    genai = None
 
+from app.core.logging_utils import get_logger
 from .base import BaseAIProvider, ChatMessage, ChatResponse
 
+# Conditional import for HarmCategory and HarmBlockThreshold
+try:
+    from google.generativeai.types import HarmCategory, HarmBlockThreshold
+except ImportError:
+    HarmCategory = None
+    HarmBlockThreshold = None
+
+logger = get_logger(__name__)
 
 class GeminiProvider(BaseAIProvider):
     """Google Gemini provider implementation."""
     
     def __init__(self, api_key: str, model: str = "gemini-1.5-flash"):
+        if genai is None:
+            raise ImportError(
+                "Google Generative AI package is not installed. "
+                "Install it with: pip install 'google-generativeai>=0.7.2' "
+                "or install the full package with: pip install '.[gemini]'"
+            )
+        
         super().__init__(api_key, model)
         genai.configure(api_key=api_key)
         self.client = genai.GenerativeModel(model)
         
         # Safety settings - more permissive for AI assistant use cases
-        self.safety_settings = {
-            HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-            HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-            HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-            HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+        self.safety_settings = {}
+        if HarmCategory and HarmBlockThreshold:
+            self.safety_settings = {
+                HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+                HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+                HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+                HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+            }
+        
+        # Default models for different use cases
+        self.default_models = {
+            "fast": "gemini-1.5-flash",
+            "balanced": "gemini-1.5-pro",
+            "advanced": "gemini-1.5-pro"
         }
     
     def _convert_messages_to_gemini_format(self, messages: List[ChatMessage]) -> List[Dict[str, str]]:

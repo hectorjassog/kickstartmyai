@@ -1,17 +1,36 @@
-"""Anthropic provider implementation."""
+"""Anthropic AI provider implementation."""
 
-from typing import List, Optional, AsyncGenerator
-import anthropic
+from typing import Dict, List, Optional, AsyncGenerator
+try:
+    import anthropic
+except ImportError:
+    anthropic = None
 
+from app.core.logging_utils import get_logger
 from .base import BaseAIProvider, ChatMessage, ChatResponse
 
+logger = get_logger(__name__)
 
 class AnthropicProvider(BaseAIProvider):
-    """Anthropic provider implementation."""
+    """Anthropic Claude provider implementation."""
     
-    def __init__(self, api_key: str, model: str = "claude-sonnet-4-20250514"):
+    def __init__(self, api_key: str, model: str = "claude-3-sonnet-20240229"):
+        if anthropic is None:
+            raise ImportError(
+                "Anthropic package is not installed. "
+                "Install it with: pip install 'anthropic>=0.53.0' "
+                "or install the full package with: pip install '.[anthropic]'"
+            )
+        
         super().__init__(api_key, model)
-        self.client = anthropic.AsyncAnthropic(api_key=api_key)
+        self.client = anthropic.Anthropic(api_key=api_key)
+        
+        # Default models for different use cases
+        self.default_models = {
+            "fast": "claude-3-haiku-20240307",
+            "balanced": "claude-3-sonnet-20240229", 
+            "advanced": "claude-3-5-sonnet-20241022"
+        }
     
     async def chat_completion(
         self,
