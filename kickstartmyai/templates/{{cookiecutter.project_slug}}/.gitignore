@@ -138,7 +138,6 @@ logs/
 *.log
 
 # AI/ML specific
-models/
 data/
 datasets/
 checkpoints/
