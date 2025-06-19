@@ -133,7 +133,7 @@ def setup_logging():
     
     # Configure logging format
     if settings.LOG_FORMAT == "json":
-        # JSON logging for production
+        # JSON logging
         import json
         
         class JSONFormatter(logging.Formatter):
@@ -168,14 +168,47 @@ def setup_logging():
                 if record.exc_info:
                     log_obj["exception"] = self.formatException(record.exc_info)
                 
-                return json.dumps(log_obj)
+                # Pretty print for development, compact for production
+                if settings.is_development():
+                    return json.dumps(log_obj, indent=2, ensure_ascii=False)
+                else:
+                    return json.dumps(log_obj, separators=(',', ':'), ensure_ascii=False)
         
         formatter = JSONFormatter()
+        
     else:
-        # Standard logging for development
-        formatter = logging.Formatter(
-            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-        )
+        # Enhanced text logging with colors for development
+        if settings.is_development():
+            try:
+                import colorlog
+                
+                # Colorized formatter for development
+                formatter = colorlog.ColoredFormatter(
+                    "%(log_color)s%(asctime)s %(bold)s[%(levelname)-8s]%(reset)s "
+                    "%(blue)s%(name)s:%(lineno)d%(reset)s - %(message)s",
+                    datefmt="%Y-%m-%d %H:%M:%S",
+                    log_colors={
+                        'DEBUG': 'cyan',
+                        'INFO': 'green',
+                        'WARNING': 'yellow',
+                        'ERROR': 'red',
+                        'CRITICAL': 'red,bg_white',
+                    },
+                    secondary_log_colors={},
+                    style='%'
+                )
+            except ImportError:
+                # Fallback to enhanced standard formatter
+                formatter = logging.Formatter(
+                    "%(asctime)s [%(levelname)-8s] %(name)s:%(lineno)d - %(message)s",
+                    datefmt="%Y-%m-%d %H:%M:%S"
+                )
+        else:
+            # Production text format - compact and structured
+            formatter = logging.Formatter(
+                "%(asctime)s [%(levelname)s] %(name)s:%(lineno)d - %(message)s",
+                datefmt="%Y-%m-%d %H:%M:%S"
+            )
     
     # Configure root logger
     root_logger = logging.getLogger()
@@ -187,6 +220,13 @@ def setup_logging():
     # Add console handler
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(formatter)
+    
+    # Set console handler level based on environment
+    if settings.is_development():
+        console_handler.setLevel(logging.DEBUG)
+    else:
+        console_handler.setLevel(logging.INFO)
+    
     root_logger.addHandler(console_handler)
     
     # Add file handler if specified
@@ -197,13 +237,31 @@ def setup_logging():
             maxBytes=10*1024*1024,  # 10MB
             backupCount=5
         )
-        file_handler.setFormatter(formatter)
+        
+        # Always use JSON format for file logging for easier parsing
+        json_formatter = JSONFormatter() if settings.LOG_FORMAT == "json" else logging.Formatter(
+            "%(asctime)s [%(levelname)s] %(name)s:%(lineno)d - %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S"
+        )
+        file_handler.setFormatter(json_formatter)
         root_logger.addHandler(file_handler)
     
     # Set specific logger levels
     logging.getLogger("uvicorn").setLevel(logging.INFO)
+    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)  # Reduce noise
     logging.getLogger("sqlalchemy.engine").setLevel(
         logging.INFO if settings.DEBUG else logging.WARNING
+    )
+    
+    # Set third-party library log levels to reduce noise
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+    logging.getLogger("asyncio").setLevel(logging.WARNING)
+    
+    # Log the configuration for debugging
+    logger.info(
+        f"Logging configured - Format: {settings.LOG_FORMAT}, "
+        f"Level: {settings.LOG_LEVEL}, Environment: {settings.ENVIRONMENT}"
     )
 
 

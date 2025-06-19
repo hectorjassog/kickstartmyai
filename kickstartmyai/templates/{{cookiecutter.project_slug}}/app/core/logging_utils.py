@@ -201,3 +201,103 @@ class StructuredLogger:
     
     def critical(self, message: str, **context):
         self._log(logging.CRITICAL, message, **context)
+
+
+# Example usage patterns
+def example_usage():
+    """
+    Example demonstrating various logging patterns.
+    
+    This function shows best practices for using the enhanced logging system.
+    """
+    
+    # 1. Basic structured logging
+    logger = get_logger(__name__)
+    logger.info("Basic log message", extra={
+        "user_id": "123",
+        "action": "login",
+        "ip_address": "192.168.1.1"
+    })
+    
+    # 2. Using structured logger with context
+    user_logger = StructuredLogger(logger, user_id="123", session_id="abc-456")
+    user_logger.info("User performed action", action="create_conversation")
+    user_logger.warning("Rate limit approaching", remaining_requests=5)
+    
+    # 3. Using operation context manager
+    with log_operation("process_user_request", logger=logger, user_id="123"):
+        # Simulate some work
+        time.sleep(0.1)
+        logger.info("Processing step completed", step="validation")
+    
+    # 4. Using function decorator
+    @log_function_call(logger=logger, include_args=True)
+    async def example_function(user_id: str, data: dict):
+        logger.info("Processing user data", data_size=len(str(data)))
+        return {"status": "success", "processed_items": 42}
+    
+    # 5. AI interaction logging
+    log_ai_interaction(
+        provider="openai",
+        model="gpt-4",
+        tokens_used=150,
+        cost=0.003,
+        logger=logger
+    )
+    
+    # 6. Database operation logging
+    log_database_operation(
+        operation="SELECT",
+        table="conversations",
+        duration_ms=25.5,
+        rows_affected=10,
+        logger=logger
+    )
+    
+    # 7. Error handling with context
+    try:
+        raise ValueError("Something went wrong")
+    except Exception as e:
+        logger.error(
+            "Operation failed",
+            extra={
+                "error_type": type(e).__name__,
+                "error_message": str(e),
+                "user_id": "123",
+                "operation": "example_operation"
+            },
+            exc_info=True
+        )
+
+
+"""
+CONFIGURATION EXAMPLES:
+
+1. Development with colors (text format):
+   ENVIRONMENT=development
+   LOG_FORMAT=text
+   LOG_LEVEL=DEBUG
+
+2. Development with pretty JSON:
+   ENVIRONMENT=development  
+   LOG_FORMAT=json
+   LOG_LEVEL=DEBUG
+
+3. Production with compact JSON:
+   ENVIRONMENT=production
+   LOG_FORMAT=json
+   LOG_LEVEL=INFO
+
+4. Production with text format:
+   ENVIRONMENT=production
+   LOG_FORMAT=text
+   LOG_LEVEL=WARNING
+
+The logging system will automatically:
+- Add colors in development with text format
+- Pretty-print JSON in development  
+- Use compact JSON in production
+- Include line numbers, module names, and timestamps
+- Provide structured logging with extra context
+- Support request IDs, correlation IDs, and performance metrics
+"""

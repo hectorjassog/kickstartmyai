@@ -52,6 +52,7 @@ numpy==1.24.3
 structlog==23.2.0
 sentry-sdk[fastapi]==1.38.0
 {%- endif %}
+colorlog==6.8.0
 
 # Utilities
 python-dotenv==1.0.0
