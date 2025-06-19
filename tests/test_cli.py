@@ -98,19 +98,15 @@ class TestCLI:
         mock_generator_class.return_value = mock_generator
         mock_generator.generate_project.return_value = "/tmp/test-project"
         
-        # Simulate interactive input
+        # Simulate interactive input (match CLI prompts)
         inputs = [
             "Test Project",      # project name
-            "test-project",      # project slug  
-            "Test Description",  # description
-            "Test Author",       # author name
+            "Test Author",       # author name  
             "test@example.com",  # author email
-            "postgresql",        # database type
-            "y",                 # include redis
-            "y",                 # include monitoring
-            "y",                 # include terraform
+            "Test Description",  # description
             "us-east-1",         # aws region
-            "y"                  # confirm
+            "y",                 # include redis
+            "y"                  # include monitoring
         ]
         
         result = runner.invoke(app, ["create", "--interactive"], input="\n".join(inputs))
@@ -159,31 +155,31 @@ class TestCLI:
 class TestCLIUtilities:
     """Test CLI utility functions."""
 
-    @patch('kickstartmyai.cli.main.typer.echo')
-    def test_success_message(self, mock_echo):
+    @patch('kickstartmyai.cli.main.console.print')
+    def test_success_message(self, mock_print):
         """Test success message formatting."""
         from kickstartmyai.cli.main import success_message
         success_message("Test message")
-        mock_echo.assert_called_once()
-        args = mock_echo.call_args[0]
+        mock_print.assert_called_once()
+        args = mock_print.call_args[0]
         assert "✅" in args[0] or "success" in args[0].lower()
 
-    @patch('kickstartmyai.cli.main.typer.echo')
-    def test_error_message(self, mock_echo):
+    @patch('kickstartmyai.cli.main.console.print')
+    def test_error_message(self, mock_print):
         """Test error message formatting."""
         from kickstartmyai.cli.main import error_message
         error_message("Test error")
-        mock_echo.assert_called_once()
-        args = mock_echo.call_args[0]
+        mock_print.assert_called_once()
+        args = mock_print.call_args[0]
         assert "❌" in args[0] or "error" in args[0].lower()
 
-    @patch('kickstartmyai.cli.main.typer.echo')
-    def test_info_message(self, mock_echo):
+    @patch('kickstartmyai.cli.main.console.print')
+    def test_info_message(self, mock_print):
         """Test info message formatting.""" 
         from kickstartmyai.cli.main import info_message
         info_message("Test info")
-        mock_echo.assert_called_once()
-        args = mock_echo.call_args[0]
+        mock_print.assert_called_once()
+        args = mock_print.call_args[0]
         assert "ℹ️" in args[0] or "info" in args[0].lower()
 
 
