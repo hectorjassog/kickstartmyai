@@ -6,64 +6,124 @@ import re
 from typing import Optional
 
 
-def validate_project_name(project_name: str) -> bool:
+class ProjectValidationError(Exception):
+    """Custom exception for project validation errors."""
+    
+    def __init__(self, field: str, message: str, value: Optional[str] = None):
+        """
+        Initialize validation error.
+        
+        Args:
+            field: The field that failed validation
+            message: Error message
+            value: The invalid value (optional)
+        """
+        self.field = field
+        self.message = message
+        self.value = value
+        
+        error_msg = f"Validation error for '{field}': {message}"
+        if value is not None:
+            error_msg += f" (value: '{value}')"
+        
+        super().__init__(error_msg)
+
+
+def validate_project_name(project_name: str) -> None:
     """
     Validate project name format.
     
     Rules:
-    - Only letters, numbers, hyphens, and underscores
-    - Must start with a letter
-    - Length between 2 and 50 characters
-    - No consecutive special characters
+    - Not empty and not just whitespace
+    - Length between 1 and 100 characters
+    - No newlines or tabs
     
     Args:
         project_name: The project name to validate
         
-    Returns:
-        True if valid, False otherwise
+    Raises:
+        ProjectValidationError: If validation fails
     """
-    if not project_name:
-        return False
+    if not project_name or not project_name.strip():
+        raise ProjectValidationError("project_name", "Project name cannot be empty", project_name)
     
     # Check length
-    if len(project_name) < 2 or len(project_name) > 50:
-        return False
+    if len(project_name) > 100:
+        raise ProjectValidationError("project_name", "Project name cannot be longer than 100 characters", project_name)
+    
+    # Check for invalid characters
+    if '\n' in project_name or '\t' in project_name:
+        raise ProjectValidationError("project_name", "Project name cannot contain newlines or tabs", project_name)
+
+
+def validate_project_slug(project_slug: str) -> None:
+    """
+    Validate project slug format.
+    
+    Rules:
+    - Only lowercase letters, numbers, hyphens, and underscores
+    - Must start with a letter
+    - Cannot start or end with hyphen/underscore
+    - No consecutive special characters
+    - Length between 2 and 50 characters
+    
+    Args:
+        project_slug: The project slug to validate
+        
+    Raises:
+        ProjectValidationError: If validation fails
+    """
+    if not project_slug:
+        raise ProjectValidationError("project_slug", "Project slug cannot be empty", project_slug)
+    
+    # Check length
+    if len(project_slug) < 2 or len(project_slug) > 50:
+        raise ProjectValidationError("project_slug", "Project slug must be between 2 and 50 characters", project_slug)
     
     # Must start with a letter
-    if not project_name[0].isalpha():
-        return False
+    if not project_slug[0].isalpha():
+        raise ProjectValidationError("project_slug", "Project slug must start with a letter", project_slug)
     
-    # Only allowed characters: letters, numbers, hyphens, underscores
-    if not re.match(r'^[a-zA-Z][a-zA-Z0-9_-]*$', project_name):
-        return False
+    # Only allowed characters: lowercase letters, numbers, hyphens, underscores
+    if not re.match(r'^[a-z][a-z0-9_-]*$', project_slug):
+        raise ProjectValidationError("project_slug", "Project slug can only contain lowercase letters, numbers, hyphens, and underscores", project_slug)
     
     # No consecutive special characters
-    if re.search(r'[-_]{2,}', project_name):
-        return False
+    if re.search(r'[-_]{2,}', project_slug):
+        raise ProjectValidationError("project_slug", "Project slug cannot have consecutive hyphens or underscores", project_slug)
     
     # Cannot end with special character
-    if project_name.endswith(('-', '_')):
-        return False
-    
-    return True
+    if project_slug.endswith(('-', '_')):
+        raise ProjectValidationError("project_slug", "Project slug cannot end with hyphen or underscore", project_slug)
 
 
-def validate_email(email: str) -> bool:
+def validate_email(email: str) -> None:
     """
     Validate email format.
     
     Args:
         email: Email address to validate
         
-    Returns:
-        True if valid email format, False otherwise
+    Raises:
+        ProjectValidationError: If validation fails
     """
     if not email:
-        return False
+        raise ProjectValidationError("email", "Email cannot be empty", email)
     
-    # Basic email regex pattern
-    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-    return bool(re.match(pattern, email))
+    # Basic email regex pattern (more strict)
+    pattern = r'^[a-zA-Z0-9][a-zA-Z0-9._%+-]*[a-zA-Z0-9]@[a-zA-Z0-9][a-zA-Z0-9.-]*[a-zA-Z0-9]\.[a-zA-Z]{2,}$'
+    
+    # Check for consecutive dots
+    if '..' in email:
+        raise ProjectValidationError("email", "Email cannot contain consecutive dots", email)
+    
+    # Check for spaces
+    if ' ' in email:
+        raise ProjectValidationError("email", "Email cannot contain spaces", email)
+    
+    # Check general pattern
+    if not re.match(pattern, email):
+        raise ProjectValidationError("email", "Invalid email format", email)
 
 
 def validate_python_package_name(name: str) -> bool:
@@ -88,18 +148,18 @@ def validate_python_package_name(name: str) -> bool:
     return bool(re.match(pattern, name))
 
 
-def validate_aws_region(region: str) -> bool:
+def validate_aws_region(region: str) -> None:
     """
     Validate AWS region format.
     
     Args:
         region: AWS region to validate
         
-    Returns:
-        True if valid AWS region format, False otherwise
+    Raises:
+        ProjectValidationError: If validation fails
     """
     if not region:
-        return False
+        raise ProjectValidationError("aws_region", "AWS region cannot be empty", region)
     
     # Common AWS regions pattern
     aws_regions = {
@@ -112,7 +172,8 @@ def validate_aws_region(region: str) -> bool:
         'af-south-1', 'me-south-1'
     }
     
-    return region in aws_regions
+    if region not in aws_regions:
+        raise ProjectValidationError("aws_region", f"Invalid AWS region. Must be one of: {', '.join(sorted(aws_regions))}", region)
 
 
 def validate_database_name(name: str) -> bool:

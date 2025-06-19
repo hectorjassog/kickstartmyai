@@ -157,6 +157,18 @@ addopts = [
     "--cov-report=term-missing",
     "--cov-report=html",
 ]
+# Exclude template directories from test discovery
+norecursedirs = [
+    "kickstartmyai/templates",
+    "sandbox",
+    "*.egg",
+    ".git",
+    ".tox",
+    "dist",
+    "build",
+    "docs",
+]
+asyncio_default_fixture_loop_scope = "function"
 
 [tool.coverage.run]
 source = ["kickstartmyai"]

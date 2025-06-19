@@ -60,8 +60,10 @@ class ProjectGenerator:
         """
         
         # Validate inputs
-        if not validate_project_name(project_name):
-            raise ProjectGeneratorError(f"Invalid project name: {project_name}")
+        try:
+            validate_project_name(project_name)
+        except Exception as e:
+            raise ProjectGeneratorError(f"Invalid project name: {project_name} - {e}")
         
         # Set output directory
         if output_dir is None:

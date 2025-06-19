@@ -249,20 +249,17 @@ pytest -n auto
 
 ### Vulnerability Scanning
 
-This project includes automated security scanning with Safety CLI:
+This project includes security scanning tools for local use:
 
 ```bash
-# Install Safety (if not already installed)
-pip install safety
+# Install security tools
+make security-install
 
-# Scan for vulnerabilities
-safety scan
+# Run all security scans locally
+make security-scan
 
-# Generate JSON report
-safety scan --json > security-report.json
-
-# Scan specific requirements file
-safety scan --file requirements.txt
+# Generate security reports
+make security-report
 ```
 
 ### Security Features
@@ -279,11 +276,11 @@ safety scan --file requirements.txt
 
 ### Security Best Practices
 
-1. **Keep dependencies updated**: Run `safety scan` regularly
+1. **Keep dependencies updated**: Run `make security-scan` regularly
 2. **Use environment variables**: Never commit secrets to version control
 3. **Enable HTTPS**: Always use HTTPS in production
 4. **Monitor logs**: Set up log monitoring and alerting
-5. **Regular security audits**: Schedule periodic security reviews
+5. **Regular security audits**: Run security scans before deployments
 
 ## 🚀 Deployment
 
