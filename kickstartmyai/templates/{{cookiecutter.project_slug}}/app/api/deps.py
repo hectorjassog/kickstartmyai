@@ -526,3 +526,18 @@ class AIServiceChecker:
 def require_ai_service(provider: str):
     """Require an AI service to be available."""
     return AIServiceChecker(provider)
+
+
+# Unit of Work Dependencies
+async def get_uow() -> AsyncGenerator[Any, None]:
+    """Get Unit of Work dependency."""
+    from app.core.unit_of_work import get_unit_of_work
+    async with get_unit_of_work() as uow:
+        yield uow
+
+
+async def get_ai_uow() -> AsyncGenerator[Any, None]:
+    """Get AI Unit of Work dependency.""" 
+    from app.core.unit_of_work import get_ai_unit_of_work
+    async with get_ai_unit_of_work() as uow:
+        yield uow

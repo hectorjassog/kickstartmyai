@@ -9,6 +9,7 @@ from app.models.conversation import Conversation
 from app.models.message import Message, MessageRole
 from app.crud.message import message_crud
 from app.schemas.message import MessageCreate
+from app.core.unit_of_work import AIUnitOfWork, get_ai_unit_of_work
 
 
 class ChatService:
@@ -21,13 +22,34 @@ class ChatService:
         self,
         conversation: Conversation,
         user_message: str,
-        db: Session,
+        db: Optional[Session] = None,
+        uow: Optional[AIUnitOfWork] = None,
         temperature: float = 0.7,
         max_tokens: Optional[int] = None
     ) -> str:
         """Generate chat response for a conversation."""
+        # Use UoW if provided, otherwise create one
+        if uow is None:
+            async with get_ai_unit_of_work() as uow:
+                return await self._chat_with_uow(
+                    conversation, user_message, uow, temperature, max_tokens
+                )
+        else:
+            return await self._chat_with_uow(
+                conversation, user_message, uow, temperature, max_tokens
+            )
+    
+    async def _chat_with_uow(
+        self,
+        conversation: Conversation,
+        user_message: str,
+        uow: AIUnitOfWork,
+        temperature: float = 0.7,
+        max_tokens: Optional[int] = None
+    ) -> str:
+        """Internal method for chat with UoW."""
         # Get conversation history
-        messages = self._get_conversation_messages(conversation)
+        messages = await self._get_conversation_messages(conversation, uow)
         
         # Add user message
         messages.append(ChatMessage(role="user", content=user_message))
@@ -38,7 +60,7 @@ class ChatService:
             role=MessageRole.USER,
             conversation_id=conversation.id
         )
-        message_crud.create(db=db, obj_in=user_msg_create)
+        await uow.messages.create(obj_in=user_msg_create)
         
         # Generate AI response
         response = await self.provider.chat_completion(
@@ -53,7 +75,7 @@ class ChatService:
             role=MessageRole.ASSISTANT,
             conversation_id=conversation.id
         )
-        message_crud.create(db=db, obj_in=ai_msg_create)
+        await uow.messages.create(obj_in=ai_msg_create)
         
         return response.content
     
@@ -61,7 +83,8 @@ class ChatService:
         self,
         conversation: Conversation,
         user_message: str,
-        db: Session,
+        db: Optional[Session] = None,
+        uow: Optional[AIUnitOfWork] = None,
         temperature: float = 0.7,
         max_tokens: Optional[int] = None
     ) -> AsyncGenerator[str, None]:
@@ -100,7 +123,7 @@ class ChatService:
         )
         message_crud.create(db=db, obj_in=ai_msg_create)
     
-    def _get_conversation_messages(self, conversation: Conversation) -> List[ChatMessage]:
+    async def _get_conversation_messages(self, conversation: Conversation, uow: AIUnitOfWork) -> List[ChatMessage]:
         """Convert conversation messages to ChatMessage format."""
         messages = []
         
@@ -110,8 +133,13 @@ class ChatService:
             content="You are a helpful AI assistant."
         ))
         
+        # Get conversation history from database through UoW
+        conversation_messages = await uow.messages.get_conversation_messages(
+            conversation_id=conversation.id, limit=50
+        )
+        
         # Add conversation history
-        for message in conversation.messages:
+        for message in conversation_messages:
             messages.append(ChatMessage(
                 role=message.role.value,
                 content=message.content

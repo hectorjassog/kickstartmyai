@@ -28,6 +28,11 @@ help:
 	@echo "  type-check    Run type checking"
 	@echo "  pre-commit    Run pre-commit hooks"
 	@echo ""
+	@echo "Security:"
+	@echo "  security-install    Install security scanning tools"
+	@echo "  security-scan       Run all security scans"
+	@echo "  security-report     Generate security reports"
+	@echo ""
 	@echo "Docker:"
 	@echo "  docker-build  Build Docker image"
 	@echo "  docker-run    Run Docker container"
@@ -106,6 +111,28 @@ type-check:
 
 pre-commit:
 	pre-commit run --all-files
+
+# Security Commands
+security-install:
+	@echo "Installing security tools..."
+	pip install safety bandit semgrep
+
+security-scan:
+	@echo "Running security scans..."
+	@echo "1. Safety vulnerability scan..."
+	safety scan || true
+	@echo "2. Bandit code security scan..."
+	bandit -r app/ || true
+	@echo "3. Semgrep security patterns..."
+	semgrep --config=auto app/ || true
+
+security-report:
+	@echo "Generating security reports..."
+	mkdir -p reports/security
+	safety scan --json > reports/security/safety-report.json || true
+	bandit -r app/ -f json -o reports/security/bandit-report.json || true
+	semgrep --config=auto --json --output=reports/security/semgrep-report.json app/ || true
+	@echo "Security reports saved to reports/security/"
 
 # Docker
 docker-build:
