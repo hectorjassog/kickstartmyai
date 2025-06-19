@@ -29,6 +29,7 @@ from app.crud.message import message_crud
 from app.schemas.execution import ExecutionCreate, ExecutionUpdate
 from app.schemas.message import MessageCreate
 from app.core.config import settings
+from app.core.unit_of_work import AIUnitOfWork, get_ai_unit_of_work
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +85,8 @@ class AgentExecutionEngine:
         agent: Agent,
         conversation: Conversation,
         user_message: str,
-        db: AsyncSession,
+        db: Optional[AsyncSession] = None,
+        uow: Optional[AIUnitOfWork] = None,
         context: Optional[ExecutionContext] = None
     ) -> ExecutionResult:
         """
@@ -94,12 +96,33 @@ class AgentExecutionEngine:
             agent: Agent to execute
             conversation: Conversation context
             user_message: User's input message
-            db: Database session
+            db: Database session (deprecated, use uow instead)
+            uow: Unit of Work for atomic operations
             context: Optional execution context
             
         Returns:
             Execution result with response and metadata
         """
+        # Use UoW if provided, otherwise create one
+        if uow is None:
+            async with get_ai_unit_of_work() as uow:
+                return await self._execute_agent_with_uow(
+                    agent, conversation, user_message, uow, context
+                )
+        else:
+            return await self._execute_agent_with_uow(
+                agent, conversation, user_message, uow, context
+            )
+    
+    async def _execute_agent_with_uow(
+        self,
+        agent: Agent,
+        conversation: Conversation,
+        user_message: str,
+        uow: AIUnitOfWork,
+        context: Optional[ExecutionContext] = None
+    ) -> ExecutionResult:
+        """Execute agent with Unit of Work for atomic operations."""
         # Create execution context
         if not context:
             context = ExecutionContext(
@@ -125,7 +148,7 @@ class AgentExecutionEngine:
             metadata=context.metadata
         )
         
-        execution = await execution_crud.create(db, obj_in=execution_create)
+        execution = await uow.executions.create(obj_in=execution_create)
         context.execution_id = execution.id
         
         # Track active execution
@@ -140,7 +163,7 @@ class AgentExecutionEngine:
                 conversation=conversation,
                 user_message=user_message,
                 context=context,
-                db=db
+                uow=uow
             )
             
             # Calculate execution metrics
@@ -160,7 +183,7 @@ class AgentExecutionEngine:
                 metadata={**context.metadata, **result.metadata}
             )
             
-            await execution_crud.update(db, db_obj=execution, obj_in=execution_update)
+            await uow.executions.update(db_obj=execution, obj_in=execution_update)
             
             return ExecutionResult(
                 execution_id=execution.id,
@@ -186,7 +209,7 @@ class AgentExecutionEngine:
                 duration=time.time() - start_time
             )
             
-            await execution_crud.update(db, db_obj=execution, obj_in=execution_update)
+            await uow.executions.update(db_obj=execution, obj_in=execution_update)
             
             return ExecutionResult(
                 execution_id=execution.id,
@@ -204,7 +227,8 @@ class AgentExecutionEngine:
         agent: Agent,
         conversation: Conversation,
         user_message: str,
-        db: AsyncSession,
+        db: Optional[AsyncSession] = None,
+        uow: Optional[AIUnitOfWork] = None,
         context: Optional[ExecutionContext] = None
     ) -> AsyncGenerator[str, None]:
         """
@@ -328,17 +352,17 @@ class AgentExecutionEngine:
         conversation: Conversation,
         user_message: str,
         context: ExecutionContext,
-        db: AsyncSession
+        uow: AIUnitOfWork
     ) -> ExecutionResult:
         """Execute agent with tool support and function calling."""
         # Get AI provider
         provider = await self._get_provider(context.provider_name, context.model)
         
         # Prepare messages
-        messages = await self._prepare_messages(agent, conversation, user_message, db)
+        messages = await self._prepare_messages(agent, conversation, user_message, uow)
         
         # Save user message
-        await self._save_user_message(user_message, conversation.id, db)
+        await self._save_user_message(user_message, conversation.id, uow)
         
         # Prepare function schemas if tools are enabled
         function_schemas = None
@@ -370,7 +394,7 @@ class AgentExecutionEngine:
             
             if not function_calls:
                 # No function calls, we're done
-                await self._save_assistant_message(response.content, conversation.id, db)
+                await self._save_assistant_message(response.content, conversation.id, uow)
                 break
             
             # Execute function calls
@@ -420,7 +444,7 @@ class AgentExecutionEngine:
                 temperature=context.temperature,
                 max_tokens=context.max_tokens
             )
-            await self._save_assistant_message(final_response.content, conversation.id, db)
+            await self._save_assistant_message(final_response.content, conversation.id, uow)
             response = final_response
         
         return ExecutionResult(
@@ -467,7 +491,7 @@ class AgentExecutionEngine:
         agent: Agent,
         conversation: Conversation,
         user_message: str,
-        db: AsyncSession
+        uow: AIUnitOfWork
     ) -> List[ChatMessage]:
         """Prepare messages for AI provider."""
         messages = []
@@ -489,8 +513,8 @@ class AgentExecutionEngine:
         
         # Add conversation history (last N messages)
         history_limit = 20  # Configurable
-        recent_messages = await message_crud.get_conversation_messages(
-            db, conversation_id=conversation.id, limit=history_limit
+        recent_messages = await uow.messages.get_conversation_messages(
+            conversation_id=conversation.id, limit=history_limit
         )
         
         for msg in recent_messages:
@@ -508,7 +532,7 @@ class AgentExecutionEngine:
         self,
         content: str,
         conversation_id: uuid.UUID,
-        db: AsyncSession
+        uow: AIUnitOfWork
     ) -> Message:
         """Save user message to database."""
         message_create = MessageCreate(
@@ -516,13 +540,13 @@ class AgentExecutionEngine:
             role=MessageRole.USER,
             conversation_id=conversation_id
         )
-        return await message_crud.create(db, obj_in=message_create)
+        return await uow.messages.create(obj_in=message_create)
     
     async def _save_assistant_message(
         self,
         content: str,
         conversation_id: uuid.UUID,
-        db: AsyncSession
+        uow: AIUnitOfWork
     ) -> Message:
         """Save assistant message to database."""
         message_create = MessageCreate(
@@ -530,7 +554,7 @@ class AgentExecutionEngine:
             role=MessageRole.ASSISTANT,
             conversation_id=conversation_id
         )
-        return await message_crud.create(db, obj_in=message_create)
+        return await uow.messages.create(obj_in=message_create)
     
     def _calculate_cost(
         self,

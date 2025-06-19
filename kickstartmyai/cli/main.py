@@ -21,6 +21,134 @@ app = typer.Typer(
 console = Console()
 
 
+# Utility functions for CLI messages
+def success_message(message: str):
+    """Display a success message."""
+    console.print(f"[green]✅ {message}[/green]")
+
+
+def error_message(message: str):
+    """Display an error message."""
+    console.print(f"[red]❌ {message}[/red]")
+
+
+def info_message(message: str):
+    """Display an info message."""
+    console.print(f"[blue]ℹ️ {message}[/blue]")
+
+
+@app.command("create")
+def create_project(
+    project_name: Optional[str] = typer.Option(None, "--project-name", help="Name of the project to create"),
+    project_slug: Optional[str] = typer.Option(None, "--project-slug", help="Project slug (URL-friendly name)"),
+    output_dir: Optional[Path] = typer.Option(
+        None, 
+        "--output-dir", 
+        "-o", 
+        help="Output directory (default: current directory)"
+    ),
+    author_name: Optional[str] = typer.Option(
+        None,
+        "--author-name",
+        "-a", 
+        help="Author name"
+    ),
+    author_email: Optional[str] = typer.Option(
+        None,
+        "--author-email",
+        "-e",
+        help="Author email"
+    ),
+    description: Optional[str] = typer.Option(
+        None,
+        "--description",
+        "-d",
+        help="Project description"
+    ),
+    database_type: Optional[str] = typer.Option(
+        "postgresql",
+        "--database-type",
+        help="Database type (postgresql, mysql, sqlite)"
+    ),
+    aws_region: Optional[str] = typer.Option(
+        "us-east-1",
+        "--aws-region",
+        help="AWS region for deployment"
+    ),
+    include_redis: bool = typer.Option(
+        True,
+        "--redis/--no-redis",
+        help="Include Redis support"
+    ),
+    include_monitoring: bool = typer.Option(
+        True,
+        "--monitoring/--no-monitoring", 
+        help="Include monitoring and observability"
+    ),
+    interactive: bool = typer.Option(
+        False,
+        "--interactive/--no-interactive",
+        "-i",
+        help="Interactive mode with prompts"
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        "-f",
+        help="Overwrite existing directory"
+    ),
+):
+    """
+    Create a new FastAPI project with AI capabilities.
+    
+    Example:
+        kickstartmyai create --project-name "my-awesome-project" --author-name "John Doe" --author-email "john@example.com"
+    """
+    
+    # Handle missing project name (only for non-interactive mode)
+    if not project_name and not interactive:
+        error_message("Project name is required. Use --project-name or --interactive mode.")
+        raise typer.Exit(1)
+    
+    # Interactive mode (only prompt for fields not already provided)
+    if interactive:
+        if not project_name:
+            project_name = typer.prompt("Project name")
+        if not author_name:
+            author_name = typer.prompt("Author name", default="Your Name")
+        if not author_email:
+            author_email = typer.prompt("Author email", default="your.email@example.com")
+        if not description:
+            description = typer.prompt(
+                "Project description", 
+                default="A FastAPI project with AI capabilities"
+            )
+        aws_region = typer.prompt("AWS region", default=aws_region)
+        include_redis = typer.confirm("Include Redis support?", default=include_redis)
+        include_monitoring = typer.confirm("Include monitoring?", default=include_monitoring)
+
+    # Generate project slug if not provided
+    if not project_slug and project_name:
+        import re
+        project_slug = re.sub(r'[^a-zA-Z0-9-_]', '-', project_name.lower())
+        project_slug = re.sub(r'-+', '-', project_slug).strip('-')
+    
+    return _create_project_common(
+        project_name=project_name,
+        project_slug=project_slug,
+        output_dir=output_dir,
+        author_name=author_name,
+        author_email=author_email,
+        description=description,
+        database_type=database_type,
+        aws_region=aws_region,
+        include_redis=include_redis,
+        include_monitoring=include_monitoring,
+        interactive=interactive,
+        force=force
+    )
+
+
 @app.command("new")
 def create_new_project(
     project_name: str = typer.Argument(..., help="Name of the project to create"),
@@ -83,30 +211,57 @@ def create_new_project(
         kickstartmyai new my-awesome-project --author "John Doe" --email "john@example.com"
     """
     
-    # Validate project name
-    if not validate_project_name(project_name):
-        console.print(
-            "[red]❌ Invalid project name. Use letters, numbers, hyphens, and underscores only.[/red]"
-        )
-        raise typer.Exit(1)
+    # Generate project slug
+    import re
+    project_slug = re.sub(r'[^a-zA-Z0-9-_]', '-', project_name.lower())
+    project_slug = re.sub(r'-+', '-', project_slug).strip('-')
     
-    # Interactive mode
-    if interactive:
-        project_name = typer.prompt("Project name", default=project_name)
-        author_name = typer.prompt("Author name", default=author_name or "Your Name")
-        author_email = typer.prompt("Author email", default=author_email or "your.email@example.com")
-        description = typer.prompt(
-            "Project description", 
-            default=description or "A FastAPI project with AI capabilities"
-        )
-        aws_region = typer.prompt("AWS region", default=aws_region)
-        include_redis = typer.confirm("Include Redis support?", default=include_redis)
-        include_monitoring = typer.confirm("Include monitoring?", default=include_monitoring)
+    return _create_project_common(
+        project_name=project_name,
+        project_slug=project_slug,
+        output_dir=output_dir,
+        author_name=author_name,
+        author_email=author_email,
+        description=description,
+        database_type="postgresql",
+        aws_region=aws_region,
+        include_redis=include_redis,
+        include_monitoring=include_monitoring,
+        interactive=interactive,
+        force=force
+    )
+
+
+def _create_project_common(
+    project_name: str,
+    project_slug: str,
+    output_dir: Optional[Path],
+    author_name: Optional[str],
+    author_email: Optional[str],
+    description: Optional[str],
+    database_type: str,
+    aws_region: str,
+    include_redis: bool,
+    include_monitoring: bool,
+    interactive: bool,
+    force: bool
+):
+    """Common implementation for project creation."""
+    
+    # Validate project name
+    try:
+        validate_project_name(project_name)
+    except Exception as e:
+        error_message(f"Invalid project name: {e}")
+        raise typer.Exit(1)
     
     # Validate email if provided
-    if author_email and not validate_email(author_email):
-        console.print("[red]❌ Invalid email format.[/red]")
-        raise typer.Exit(1)
+    if author_email:
+        try:
+            validate_email(author_email)
+        except Exception as e:
+            error_message(f"Invalid email: {e}")
+            raise typer.Exit(1)
     
     # Set defaults
     if not author_name:
@@ -124,7 +279,7 @@ def create_new_project(
     
     # Check if directory exists
     if target_path.exists() and not force:
-        console.print(f"[red]❌ Directory '{target_path}' already exists. Use --force to overwrite.[/red]")
+        error_message(f"Directory '{target_path}' already exists. Use --force to overwrite.")
         raise typer.Exit(1)
     
     # Show project info
@@ -150,17 +305,7 @@ def create_new_project(
         generator = ProjectGenerator()
         
         with console.status("[bold blue]Generating project...", spinner="dots"):
-            generator.generate_project(
-                project_name=project_name,
-                output_dir=output_dir,
-                author_name=author_name,
-                author_email=author_email,
-                description=description,
-                aws_region=aws_region,
-                include_redis=include_redis,
-                include_monitoring=include_monitoring,
-                force=force
-            )
+            generator.generate_project(project_name)
         
         console.print()
         console.print(Panel.fit(
@@ -181,8 +326,10 @@ def create_new_project(
             border_style="green"
         ))
         
+        success_message("Project created successfully!")
+        
     except Exception as e:
-        console.print(f"[red]❌ Error creating project: {e}[/red]")
+        error_message(f"Error creating project: {e}")
         raise typer.Exit(1)
 
 
@@ -191,6 +338,38 @@ def show_version():
     """Show the version of KickStartMyAI."""
     from .. import __version__
     console.print(f"KickStartMyAI version: [bold blue]{__version__}[/bold blue]")
+
+
+@app.command("list-templates")
+def list_templates():
+    """List available project templates."""
+    console.print(Panel.fit(
+        Text.from_markup("""
+[bold blue]📄 Available Templates[/bold blue]
+
+[cyan]✅ FastAPI AI Template[/cyan] - Complete AI-powered FastAPI project
+  • PostgreSQL database with async SQLAlchemy
+  • AI provider integrations (OpenAI, Anthropic, Gemini)
+  • Docker containerization
+  • Authentication and authorization
+  • Testing framework
+  • CI/CD pipelines
+        """.strip()),
+        title="Project Templates",
+        border_style="blue"
+    ))
+
+
+@app.command("validate")
+def validate_template():
+    """Validate the project template."""
+    try:
+        generator = ProjectGenerator()
+        generator.validate_template()
+        success_message("Template validation passed successfully!")
+    except Exception as e:
+        error_message(f"Template validation failed: {e}")
+        raise typer.Exit(1)
 
 
 @app.command("info")

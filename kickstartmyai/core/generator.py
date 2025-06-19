@@ -60,8 +60,10 @@ class ProjectGenerator:
         """
         
         # Validate inputs
-        if not validate_project_name(project_name):
-            raise ProjectGeneratorError(f"Invalid project name: {project_name}")
+        try:
+            validate_project_name(project_name)
+        except Exception as e:
+            raise ProjectGeneratorError(f"Invalid project name: {project_name} - {e}")
         
         # Set output directory
         if output_dir is None:
@@ -147,7 +149,7 @@ class ProjectGenerator:
             'aws_region': kwargs.get('aws_region', 'us-east-1'),
             'ecs_cluster_name': f"{project_slug}-cluster",
             
-            # Optional features
+            # Optional features (convert boolean to string)
             'include_redis': 'y' if kwargs.get('include_redis', True) else 'n',
             'include_monitoring': 'y' if kwargs.get('include_monitoring', True) else 'n',
             'include_load_testing': 'y' if kwargs.get('include_load_testing', True) else 'n',
@@ -162,8 +164,13 @@ class ProjectGenerator:
             'domain_name': 'example.com',
         }
         
-        # Add any additional kwargs
-        context.update(kwargs)
+        # Add any additional kwargs, but convert boolean choice variables to strings
+        for key, value in kwargs.items():
+            if key in ['include_redis', 'include_monitoring', 'include_load_testing']:
+                # Convert boolean to string for cookiecutter choice variables
+                context[key] = 'y' if value else 'n'
+            else:
+                context[key] = value
         
         return context
     
@@ -615,3 +622,80 @@ docker-run:
 """
         
         (project_path / "Makefile").write_text(makefile_content)
+    
+    def get_context(self) -> Dict[str, Any]:
+        """
+        Get the default cookiecutter context.
+        
+        Returns:
+            Default cookiecutter context
+        """
+        return {
+            "project_name": "My Project",
+            "project_slug": "my-project",
+            "project_description": "A FastAPI project with AI capabilities",
+            "author_name": "Your Name",
+            "author_email": "your.email@example.com",
+            "version": "0.1.0",
+            "python_version": "3.11",
+            "database_type": "postgresql",
+            "database_name": "my_project_db",
+            "database_user": "my_project_user",
+            "aws_region": "us-east-1",
+            "include_redis": "y",
+            "include_monitoring": "y",
+            "include_load_testing": "y",
+        }
+    
+    def validate_template(self) -> bool:
+        """
+        Validate the project template structure and files.
+        
+        Returns:
+            True if template is valid
+            
+        Raises:
+            Exception: If template validation fails
+        """
+        if not self.template_dir.exists():
+            raise Exception(f"Template directory not found: {self.template_dir}")
+        
+        # Check for required template files
+        required_files = [
+            "cookiecutter.json"
+        ]
+        
+        for file_name in required_files:
+            file_path = self.template_dir / file_name
+            if not file_path.exists():
+                raise Exception(f"Required template file missing: {file_name}")
+        
+        return True
+    
+    def validate_context(self, context: Dict[str, Any]):
+        """
+        Validate the cookiecutter context.
+        
+        Args:
+            context: Cookiecutter context to validate
+            
+        Raises:
+            ProjectValidationError: If context validation fails
+        """
+        from .validators import ProjectValidationError, validate_email
+        
+        project_name = context.get('project_name')
+        if not project_name:
+            raise ProjectValidationError('project_name', 'Project name is required')
+        
+        try:
+            validate_project_name(project_name)
+        except Exception as e:
+            raise ProjectValidationError('project_name', str(e))
+        
+        author_email = context.get('author_email')
+        if author_email:
+            try:
+                validate_email(author_email)
+            except Exception as e:
+                raise ProjectValidationError('author_email', str(e))

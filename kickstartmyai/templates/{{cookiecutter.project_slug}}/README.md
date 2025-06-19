@@ -12,7 +12,7 @@
 - **☁️ AWS ECS Deployment**: Production-ready container orchestration
 - **🏗️ Terraform Infrastructure**: Infrastructure as Code for reliable deployments
 - **🧪 Comprehensive Testing**: Unit, integration, and E2E tests with pytest
-- **🔐 Security**: JWT authentication, CORS, rate limiting, and security headers
+- **🔐 Security**: JWT authentication, CORS, rate limiting, security headers, and vulnerability scanning
 - **📊 Monitoring**: Health checks, metrics, structured logging, and observability
 - **🐳 Docker**: Containerized development and production environments
 - **⚡ Redis**: Caching and session storage
@@ -244,6 +244,43 @@ pytest tests/e2e/          # End-to-end tests
 # Run tests in parallel
 pytest -n auto
 ```
+
+## 🔒 Security
+
+### Vulnerability Scanning
+
+This project includes security scanning tools for local use:
+
+```bash
+# Install security tools
+make security-install
+
+# Run all security scans locally
+make security-scan
+
+# Generate security reports
+make security-report
+```
+
+### Security Features
+
+- **Authentication**: JWT-based authentication with refresh tokens
+- **Authorization**: Role-based access control and resource ownership
+- **Input Validation**: Pydantic models for request/response validation
+- **SQL Injection Protection**: SQLAlchemy ORM with parameterized queries
+- **CORS Configuration**: Configurable CORS for cross-origin requests
+- **Rate Limiting**: Built-in rate limiting with Redis backend
+- **Security Headers**: Automatic security headers middleware
+- **Environment Isolation**: Separate configs for dev/staging/prod
+- **Secrets Management**: Environment-based secret management
+
+### Security Best Practices
+
+1. **Keep dependencies updated**: Run `make security-scan` regularly
+2. **Use environment variables**: Never commit secrets to version control
+3. **Enable HTTPS**: Always use HTTPS in production
+4. **Monitor logs**: Set up log monitoring and alerting
+5. **Regular security audits**: Run security scans before deployments
 
 ## 🚀 Deployment
 

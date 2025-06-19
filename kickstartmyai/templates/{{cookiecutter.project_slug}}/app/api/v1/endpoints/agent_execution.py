@@ -20,6 +20,8 @@ from app.crud.agent import agent_crud
 from app.crud.conversation import conversation_crud
 from app.models.user import User
 from app.schemas.execution import ExecutionResponse
+from app.core.unit_of_work import AIUnitOfWork
+from app.api.deps import get_ai_uow
 
 router = APIRouter()
 
@@ -58,7 +60,7 @@ class ActiveExecutionResponse(BaseModel):
 @router.post("/execute", response_model=AgentExecutionResponse)
 async def execute_agent(
     *,
-    db: AsyncSession = Depends(deps.get_db),
+    uow: AIUnitOfWork = Depends(get_ai_uow),
     request: AgentExecutionRequest,
     current_user: User = Depends(deps.get_current_user),
 ) -> Any:
@@ -66,7 +68,7 @@ async def execute_agent(
     Execute an AI agent with the given message.
     
     Args:
-        db: Database session
+        uow: Unit of Work for atomic operations
         request: Execution request
         current_user: Current authenticated user
         
@@ -74,7 +76,7 @@ async def execute_agent(
         Execution result with response
     """
     # Get agent
-    agent = await agent_crud.get(db, id=request.agent_id)
+    agent = await uow.agents.get(id=request.agent_id)
     if not agent:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -90,7 +92,7 @@ async def execute_agent(
     
     # Get or create conversation
     if request.conversation_id:
-        conversation = await conversation_crud.get(db, id=request.conversation_id)
+        conversation = await uow.conversations.get(id=request.conversation_id)
         if not conversation:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -111,7 +113,7 @@ async def execute_agent(
             agent_id=agent.id,
             user_id=current_user.id
         )
-        conversation = await conversation_crud.create(db, obj_in=conversation_create)
+        conversation = await uow.conversations.create(obj_in=conversation_create)
     
     # Create execution context
     context = ExecutionContext(
@@ -132,7 +134,7 @@ async def execute_agent(
             agent=agent,
             conversation=conversation,
             user_message=request.message,
-            db=db,
+            uow=uow,
             context=context
         )
         
@@ -155,7 +157,6 @@ async def execute_agent(
 @router.post("/execute/stream")
 async def stream_agent_execution(
     *,
-    db: AsyncSession = Depends(deps.get_db),
     request: AgentExecutionRequest,
     current_user: User = Depends(deps.get_current_user),
 ) -> StreamingResponse:
@@ -163,77 +164,70 @@ async def stream_agent_execution(
     Execute an AI agent with streaming response.
     
     Args:
-        db: Database session
         request: Execution request
         current_user: Current authenticated user
         
     Returns:
         Streaming response with real-time agent output
     """
-    # Get agent
-    agent = await agent_crud.get(db, id=request.agent_id)
-    if not agent:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Agent not found"
-        )
-    
-    # Check agent ownership
-    if agent.user_id != current_user.id and not current_user.is_superuser:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions to execute this agent"
-        )
-    
-    # Get or create conversation
-    if request.conversation_id:
-        conversation = await conversation_crud.get(db, id=request.conversation_id)
-        if not conversation:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Conversation not found"
-            )
-        
-        # Check conversation ownership
-        if conversation.user_id != current_user.id and not current_user.is_superuser:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not enough permissions to access this conversation"
-            )
-    else:
-        # Create new conversation
-        from app.schemas.conversation import ConversationCreate
-        conversation_create = ConversationCreate(
-            title=f"Chat with {agent.name}",
-            agent_id=agent.id,
-            user_id=current_user.id
-        )
-        conversation = await conversation_crud.create(db, obj_in=conversation_create)
-    
-    # Create execution context
-    context = ExecutionContext(
-        agent_id=agent.id,
-        conversation_id=conversation.id,
-        user_id=current_user.id,
-        provider_name=agent.provider,
-        model=request.temperature and agent.model or request.model,
-        temperature=request.temperature or agent.temperature,
-        max_tokens=request.max_tokens or agent.max_tokens,
-        streaming=True,
-        metadata=request.metadata
-    )
-    
     async def generate_stream():
-        """Generate streaming response."""
+        """Generate streaming response with UoW management."""
         try:
-            async for chunk in execution_engine.stream_agent_execution(
-                agent=agent,
-                conversation=conversation,
-                user_message=request.message,
-                db=db,
-                context=context
-            ):
-                yield f"data: {chunk}\n\n"
+            async with get_ai_uow() as uow:
+                # Get agent
+                agent = await uow.agents.get(id=request.agent_id)
+                if not agent:
+                    yield f"data: [Error: Agent not found]\n\n"
+                    return
+                
+                # Check agent ownership
+                if agent.user_id != current_user.id and not current_user.is_superuser:
+                    yield f"data: [Error: Not enough permissions to execute this agent]\n\n"
+                    return
+                
+                # Get or create conversation
+                if request.conversation_id:
+                    conversation = await uow.conversations.get(id=request.conversation_id)
+                    if not conversation:
+                        yield f"data: [Error: Conversation not found]\n\n"
+                        return
+                    
+                    # Check conversation ownership
+                    if conversation.user_id != current_user.id and not current_user.is_superuser:
+                        yield f"data: [Error: Not enough permissions to access this conversation]\n\n"
+                        return
+                else:
+                    # Create new conversation
+                    from app.schemas.conversation import ConversationCreate
+                    conversation_create = ConversationCreate(
+                        title=f"Chat with {agent.name}",
+                        agent_id=agent.id,
+                        user_id=current_user.id
+                    )
+                    conversation = await uow.conversations.create(obj_in=conversation_create)
+                
+                # Create execution context
+                context = ExecutionContext(
+                    agent_id=agent.id,
+                    conversation_id=conversation.id,
+                    user_id=current_user.id,
+                    provider_name=agent.provider,
+                    model=request.temperature and agent.model or getattr(request, 'model', None),
+                    temperature=request.temperature or agent.temperature,
+                    max_tokens=request.max_tokens or agent.max_tokens,
+                    streaming=True,
+                    metadata=request.metadata
+                )
+                
+                # Stream agent execution
+                async for chunk in execution_engine.stream_agent_execution(
+                    agent=agent,
+                    conversation=conversation,
+                    user_message=request.message,
+                    uow=uow,
+                    context=context
+                ):
+                    yield f"data: {chunk}\n\n"
         except Exception as e:
             yield f"data: [Error: {str(e)}]\n\n"
         finally:
