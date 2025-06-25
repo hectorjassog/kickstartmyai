@@ -5,6 +5,18 @@
 
 set -e  # Exit on any error
 
+# Default port
+DEFAULT_PORT=8000
+PORT=${1:-$DEFAULT_PORT}
+
+# Validate port number
+if ! [[ "$PORT" =~ ^[0-9]+$ ]] || [ "$PORT" -lt 1 ] || [ "$PORT" -gt 65535 ]; then
+    echo "❌ Error: Invalid port number '$PORT'. Please provide a valid port (1-65535)."
+    echo "💡 Usage: ./run_local.sh [PORT]"
+    echo "💡 Example: ./run_local.sh 8080"
+    exit 1
+fi
+
 echo "🚀 Starting AskMyDrive local development server..."
 echo "📍 Working directory: $(pwd)"
 
@@ -31,25 +43,25 @@ fi
 
 echo "🔧 Configuration:"
 echo "   - Host: 0.0.0.0"
-echo "   - Port: 8000"
+echo "   - Port: $PORT"
 echo "   - Reload: enabled"
 echo "   - Log level: info"
 echo ""
 
 echo "🌐 Server will be available at:"
-echo "   - Local: http://localhost:8000"
-echo "   - Network: http://0.0.0.0:8000"
-echo "   - API Docs: http://localhost:8000/docs"
-echo "   - ReDoc: http://localhost:8000/redoc"
+echo "   - Local: http://localhost:$PORT"
+echo "   - Network: http://0.0.0.0:$PORT"
+echo "   - API Docs: http://localhost:$PORT/docs"
+echo "   - ReDoc: http://localhost:$PORT/redoc"
 echo ""
 
-echo "⏳ Starting server... (Press Ctrl+C to stop)"
+echo "⏳ Starting server on port $PORT... (Press Ctrl+C to stop)"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 # Run uvicorn with development settings
 uvicorn app.main:app \
     --host 0.0.0.0 \
-    --port 8000 \
+    --port $PORT \
     --reload \
     --log-level info \
     --reload-dir app \

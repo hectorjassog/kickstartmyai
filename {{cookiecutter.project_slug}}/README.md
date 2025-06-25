@@ -42,6 +42,10 @@ make db-init
 # 5. Access your application
 # API: http://localhost:8000
 # Docs: http://localhost:8000/docs
+
+# Alternative: Use the local script with custom port
+./run_local.sh        # Default port 8000
+./run_local.sh 8001   # Custom port 8001
 ```
 
 ### Option 2: Local Development
@@ -68,6 +72,10 @@ make db-init
 
 # 6. Start the application
 make run-dev
+
+# Or use the local script with custom port
+./run_local.sh        # Runs on default port 8000
+./run_local.sh 8080    # Runs on custom port 8080
 ```
 
 ## 🔧 Environment Setup
@@ -141,6 +149,8 @@ make setup                # Complete development environment setup
 
 # Development
 make run-dev              # Start development server with hot reload
+./run_local.sh            # Start development server on port 8000
+./run_local.sh 8080       # Start development server on custom port 8080
 make run-prod             # Start production server
 make clean                # Clean cache and temporary files
 
